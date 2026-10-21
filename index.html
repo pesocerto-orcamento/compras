@@ -131,6 +131,10 @@ select.pillsel{appearance:none;-webkit-appearance:none;cursor:pointer;height:30p
 .o-name .nm{overflow-wrap:anywhere}
 .o-name .no{font-family:var(--font-num);font-size:12px;color:var(--muted);font-weight:400}
 .o-meta{font-size:12.5px;color:var(--muted);margin-top:2px}
+.parc{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.parc span{font-size:11.5px;font-family:var(--font-num);font-variant-numeric:tabular-nums;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--muted);white-space:nowrap}
+.parc b{color:var(--fg);font-weight:600}
+.bol-tipo{font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap}
 .o-val{font-family:var(--font-num);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .acts{display:flex;gap:2px}
 .empty{padding:48px 20px;text-align:center;color:var(--muted)}
@@ -138,6 +142,7 @@ select.pillsel{appearance:none;-webkit-appearance:none;cursor:pointer;height:30p
 .empty b{display:block;color:var(--fg);font-weight:500;margin-bottom:4px}
 /* Contas */
 .form-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.2fr) auto;gap:10px;align-items:center}
+.form-row.lm{grid-template-columns:minmax(0,1.1fr) minmax(0,.7fr) minmax(0,1.4fr) minmax(0,1fr) auto}
 .boxed{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px}
 .lab{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px;display:block}
 .tbl-wrap{overflow-x:auto}
@@ -209,7 +214,7 @@ tr.paid td .desc{text-decoration:line-through}
   .order .o-val{grid-column:2}
   .order .stwrap{grid-column:2}
   .order .acts{grid-column:2}
-  .form-row{grid-template-columns:1fr}
+  .form-row,.form-row.lm{grid-template-columns:1fr}
   .grid2,.dl,.cols{grid-template-columns:1fr}
   .chart-box{height:260px}
 }
@@ -261,7 +266,7 @@ const S = {
   view: "dashboard", pedidos: [], contas: [], metas: {}, metaPadrao: 150000,
   ano: today.getFullYear(), mes: today.getMonth(), // dashboard
   f: {q:"",status:"",conf:"",mes:"",ord:"recente",dir:"desc"},
-  cf: {mes:"todos"}, pq: "", pord: "valor",
+  cf: {mes:"",tipo:"",q:""}, pq: "", pord: "valor",
   pin: "", live: false, loaded: {p:false,c:false,m:false}
 };
 let chart = null;
@@ -331,9 +336,30 @@ function categoria(p){
 const ativo = p => p.status!=="cancelado" && p.status!=="orcamento";
 function parcelas(p){
   const b = baseDate(p); if(!b) return [];
-  const ds = prazos(p.condicao_pagamento); const v = (Number(p.valor_total)||0)/ds.length;
-  return ds.map((d,i)=>({n:i+1,total:ds.length,dias:d,venc:addDays(b,d),valor:v}));
+  const ds = prazos(p.condicao_pagamento), tot = Math.round((Number(p.valor_total)||0)*100), n = ds.length;
+  const parte = Math.floor(tot/n);
+  return ds.map((d,i)=>({n:i+1,total:n,dias:d,venc:addDays(b,d),valor:(i===n-1 ? tot-parte*(n-1) : parte)/100}));
 }
+function anosDisponiveis(){
+  const y=today.getFullYear(), set=new Set([y-1,y,y+1,y+2,y+3,S.ano]);
+  S.pedidos.forEach(p=>parcelas(p).forEach(x=>set.add(+x.venc.slice(0,4))));
+  S.contas.forEach(c=>{ if(c.vencimento) set.add(+c.vencimento.slice(0,4)); });
+  return [...set].filter(Boolean).sort((a,b)=>a-b);
+}
+const pagas = p => Array.isArray(p.parcelas_pagas) ? p.parcelas_pagas : [];
+function chipsParcelas(p){
+  const ps=parcelas(p); if(!ps.length||!(Number(p.valor_total)>0)) return "";
+  return `<div class="parc" title="Boletos gerados pela condição de pagamento">${ps.map(x=>`<span${pagas(p).includes(x.n)?' style="text-decoration:line-through;opacity:.6" title="Pago"':""}><b>${x.n}/${x.total}</b> ${fmtD(x.venc).slice(0,5)}/${x.venc.slice(2,4)} · ${brl(x.valor)}</span>`).join("")}</div>`;
+}
+const TIPO_BOL = {enc:["Encomenda","var(--green)","var(--green-soft)"],com:["Compra","var(--red)","var(--red-soft)"],fat:["Faturado","var(--blue)","var(--blue-soft)"],conta:["Conta","var(--violet)","var(--violet-soft)"]};
+function boletosDoMes(ano,mes){
+  const k=ymKey(ano,mes), out=[];
+  for(const p of S.pedidos){ if(!ativo(p)) continue; const cat=categoria(p);
+    for(const x of parcelas(p)) if(ym(x.venc)===k) out.push({venc:x.venc,nome:p.fornecedor,ref:p.numero_pedido?`#${p.numero_pedido}`:"",parc:`${x.n}/${x.total}`,valor:x.valor,tipo:cat,id:p.id,pago:pagas(p).includes(x.n)}); }
+  for(const c of S.contas) if(ym(c.vencimento)===k) out.push({venc:c.vencimento,nome:c.descricao,ref:"",parc:"",valor:+c.valor||0,tipo:"conta",pago:c.pago});
+  return out.sort((a,b)=>a.venc.localeCompare(b.venc)||b.valor-a.valor);
+}
+
 function fluxo(ano){
   const m = Array.from({length:12},()=>({enc:0,com:0,fat:0,contas:0,total:0}));
   for (const p of S.pedidos){
@@ -423,13 +449,13 @@ function vDash(v){
   const fl = fluxo(S.ano), m = fl[S.mes], meta = metaDe(S.ano,S.mes);
   const comp = m.enc+m.com+m.fat+m.contas, saldo = meta-comp;
   const orc = S.pedidos.filter(p=>p.status==="orcamento").length;
-  const anos = [...new Set([today.getFullYear(), ...S.pedidos.map(p=>+(baseDate(p)||"").slice(0,4)).filter(Boolean)])].sort();
+  const anos = anosDisponiveis();
   const recentes = [...S.pedidos].sort((a,b)=>(b.criado_em||0)-(a.criado_em||0)).slice(0,5);
   const pct = meta>0 ? Math.min(100, comp/meta*100) : 0;
   v.innerHTML = `
   <div class="head"><div><h1>Dashboard</h1><p class="sub">Parcelas de pedidos, contas a pagar e meta de compras — ${S.ano}</p></div>
-    <div class="toolbar"><select class="f" id="dMes" aria-label="Mês">${MESES.map((n,i)=>`<option value="${i}" ${i===S.mes?"selected":""}>${n}</option>`).join("")}</select>
-    <select class="f" id="dAno" aria-label="Ano">${anos.map(a=>`<option ${a===S.ano?"selected":""}>${a}</option>`).join("")}</select></div></div>
+    <div class="toolbar"><button class="btn" id="dPrev" aria-label="Mês anterior" style="width:38px;padding:0">‹</button><select class="f" id="dMes" aria-label="Mês">${MESES.map((n,i)=>`<option value="${i}" ${i===S.mes?"selected":""}>${n}</option>`).join("")}</select>
+    <select class="f" id="dAno" aria-label="Ano">${anos.map(a=>`<option ${a===S.ano?"selected":""}>${a}</option>`).join("")}</select><button class="btn" id="dNext" aria-label="Próximo mês" style="width:38px;padding:0">›</button></div></div>
   <div class="kpis">
     <div class="card kpi"><div class="kpi-top">Meta do mês <button class="icon-btn" id="editMeta" title="Editar meta" style="width:26px;height:26px">${ic.pen}</button></div>
       <div id="metaBox"><div class="big num">${brl(meta)}</div></div><div class="mini">${MESES[S.mes]}${S.metas[ymKey(S.ano,S.mes)]==null?" · meta padrão":""}</div></div>
@@ -444,10 +470,11 @@ function vDash(v){
       <div class="big">${S.pedidos.length}</div><div class="mini">${orc} em orçamento · ${S.pedidos.filter(p=>!p.conferido&&p.status!=="cancelado").length} a conferir</div></div>
   </div>
   <div class="card pad">
-    <div class="chart-head"><div><h2>Previsão de Fluxo de Caixa</h2><div class="mini">Parcelas por vencimento + contas a pagar · barra laranja = volume comprado no mês de faturamento</div></div>
+    <div class="chart-head"><div><h2>Boletos por mês</h2><div class="mini">Cada pedido é dividido pela condição de pagamento e cada boleto cai no mês do vencimento · barra laranja = volume comprado no mês · clique num mês para ver os boletos</div></div>
       <div class="legend"><span><i style="background:var(--green)"></i>Encomendas</span><span><i style="background:var(--red)"></i>Pedidos de Compra</span><span><i style="background:var(--blue)"></i>Pedidos Faturados</span><span><i style="background:var(--violet)"></i>Contas a Pagar</span><span><i style="background:var(--amber)"></i>Pedidos por Total</span><span><i class="line" style="background:var(--gold)"></i>Meta</span></div></div>
-    <div class="chart-box"><canvas id="cf" role="img" aria-label="Fluxo de caixa mensal de ${S.ano}"></canvas></div>
+    <div class="chart-box"><canvas id="cf" role="img" aria-label="Boletos por mês de ${S.ano}"></canvas></div>
   </div>
+  ${quadroBoletos()}
   <div class="two">
     ${comp>meta ? `<div class="alert bad">${ic.warn}<div><b>Meta ultrapassada</b><p>O total comprometido em ${MESES[S.mes]} (parcelas + contas a pagar) excede a meta em <span class="num">${brl(comp-meta)}</span>.</p>${proxMeses(fl)}</div></div>`
       : `<div class="alert ok">${ic.check}<div><b>Dentro da meta</b><p>Ainda cabem <span class="num">${brl(saldo)}</span> em compras com vencimento em ${MESES[S.mes]}.</p>${proxMeses(fl)}</div></div>`}
@@ -458,6 +485,8 @@ function vDash(v){
   </div>`;
   $("#dMes").onchange=e=>{S.mes=+e.target.value;render()};
   $("#dAno").onchange=e=>{S.ano=+e.target.value;render()};
+  $("#dPrev").onclick=()=>{ if(--S.mes<0){S.mes=11;S.ano--;} render(); };
+  $("#dNext").onclick=()=>{ if(++S.mes>11){S.mes=0;S.ano++;} render(); };
   $("#editMeta").onclick=()=>{
     $("#metaBox").innerHTML=`<div style="display:flex;gap:6px"><input class="f" id="metaIn" inputmode="decimal" value="${meta.toFixed(2).replace(".",",")}" style="height:34px"><button class="btn sm primary" id="metaOk">Salvar</button></div>
     <label class="mini" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="metaAll"> Usar como meta padrão dos outros meses</label>`;
@@ -465,7 +494,15 @@ function vDash(v){
     const ok=async()=>{ const n=parseNum($("#metaIn").value); if($("#metaAll").checked) S.metaPadrao=n; S.metas[ymKey(S.ano,S.mes)]=n; await saveMetas(); render(); };
     $("#metaOk").onclick=ok; $("#metaIn").onkeydown=e=>{if(e.key==="Enter")ok(); if(e.key==="Escape")render();};
   };
+  v.querySelectorAll("[data-ver]").forEach(tr=>tr.onclick=()=>{ const p=S.pedidos.find(x=>x.id===tr.dataset.ver); if(p) modalVer(p); });
   drawChart(fl);
+}
+function quadroBoletos(){
+  const bs=boletosDoMes(S.ano,S.mes), tot=bs.reduce((a,x)=>a+x.valor,0);
+  return `<div class="card pad"><div class="chart-head"><div><h2>Boletos de ${MESES[S.mes]}</h2><div class="mini">${bs.length} boleto${bs.length===1?"":"s"} com vencimento no mês · ${brl(bs.filter(x=>x.pago).reduce((a,x)=>a+x.valor,0))} já pagos</div></div><div class="big" style="font-size:18px">${brl(tot)}</div></div>
+  ${bs.length?`<div class="tbl-wrap" style="margin-top:10px;max-height:420px;overflow:auto"><table><thead><tr><th>Vencimento</th><th>Fornecedor / conta</th><th>Pedido</th><th>Parcela</th><th>Tipo</th><th class="r">Valor</th></tr></thead><tbody>
+  ${bs.map(x=>{const t=TIPO_BOL[x.tipo];return `<tr${x.id?` data-ver="${x.id}" style="cursor:pointer"`:""}${x.pago?' class="paid"':""}><td class="num">${fmtD(x.venc)}</td><td style="font-weight:600">${esc(x.nome)}</td><td class="num mini">${esc(x.ref)}</td><td class="num">${x.parc}</td><td><span class="bol-tipo" style="color:${t[1]};background:${t[2]}">${t[0]}</span></td><td class="r num" style="font-weight:600">${brl(x.valor)}</td></tr>`}).join("")}
+  </tbody></table></div>`:`<div class="empty" style="padding:28px">Nenhum boleto vencendo em ${MESES[S.mes]}.</div>`}</div>`;
 }
 function proxMeses(fl){
   const out=[]; for(let i=1;i<=3;i++){ const mi=S.mes+i; if(mi>11) break; const x=fl[mi]; const c=x.enc+x.com+x.fat+x.contas, mt=metaDe(S.ano,mi);
@@ -538,7 +575,7 @@ function rowPedido(p){
   return `<div class="card order">
     <button class="check ${p.conferido?"on":""}" data-act="conf" data-id="${p.id}" title="${p.conferido?"Conferido":"Marcar como conferido"}" aria-pressed="${!!p.conferido}">${p.conferido?ic.ok:""}</button>
     <div style="min-width:0"><div class="o-name"><span class="nm">${esc(p.fornecedor)}</span>${p.numero_pedido?`<span class="no">#${esc(p.numero_pedido)}</span>`:""}${p.is_encomenda?`<span class="tag">ENCOMENDA</span>`:""}${atras?`<span class="tag late">ATRASADO</span>`:""}</div>
-      <div class="o-meta">${p.data_faturamento?"Faturado":"Faturamento"}: ${fmtD(baseDate(p))} &nbsp;•&nbsp; ${esc(p.condicao_pagamento||"—")}${p.condicao_faturamento?` &nbsp;•&nbsp; ${esc(p.condicao_faturamento)}`:""}</div></div>
+      <div class="o-meta">${p.data_faturamento?"Faturado":"Faturamento"}: ${fmtD(baseDate(p))} &nbsp;•&nbsp; ${esc(p.condicao_pagamento||"—")}${p.condicao_faturamento?` &nbsp;•&nbsp; ${esc(p.condicao_faturamento)}`:""}</div>${ativo(p)?chipsParcelas(p):""}</div>
     <div class="o-val">${brl(p.valor_total)}</div>
     <div class="stwrap"><select class="pillsel ${s.c}" data-act="status" data-id="${p.id}" aria-label="Status">${STATUS.map(x=>`<option value="${x.v}" ${x.v===p.status?"selected":""}>${x.l}</option>`).join("")}</select></div>
     <div class="acts"><button class="icon-btn" data-act="ver" data-id="${p.id}" title="Ver">${ic.eye}</button><button class="icon-btn" data-act="edit" data-id="${p.id}" title="Editar">${ic.edit}</button><button class="icon-btn" data-act="del" data-id="${p.id}" title="Excluir">${ic.trash}</button></div>
@@ -599,7 +636,7 @@ function modalPedido(p){
   $("#pSave").onclick=async()=>{
     const d={fornecedor:$("#p_forn").value.trim(),numero_pedido:$("#p_num").value.trim(),valor_total:parseNum($("#p_val").value),condicao_pagamento:$("#p_cond").value.trim(),
       data_pedido:$("#p_dped").value,prazo_faturamento:$("#p_prev").value,data_faturamento:$("#p_dfat").value,status:$("#p_st").value,condicao_faturamento:$("#p_cfat").value.trim(),
-      is_encomenda:$("#p_enc").checked,observacoes:$("#p_obs").value.trim(),itens:itensTmp.filter(x=>x.descricao),conferido:!!p.conferido,criado_em:p.criado_em||Date.now()};
+      is_encomenda:$("#p_enc").checked,observacoes:$("#p_obs").value.trim(),itens:itensTmp.filter(x=>x.descricao),conferido:!!p.conferido,parcelas_pagas:pagas(p),criado_em:p.criado_em||Date.now()};
     const err=[]; if(!d.fornecedor) err.push("fornecedor"); if(!d.valor_total) err.push("valor total"); if(!d.condicao_pagamento) err.push("condição de pagamento");
     if(err.length){ const e=$("#pErr"); e.hidden=false; e.textContent="Preencha: "+err.join(", ")+"."; return; }
     $("#pSave").disabled=true;
@@ -822,7 +859,7 @@ function modalVer(p){
     <div><span>Pagamento</span>${esc(p.condicao_pagamento||"—")}</div><div><span>Cond. faturamento</span>${esc(p.condicao_faturamento||"—")}</div><div><span>Tipo</span>${p.is_encomenda?"Encomenda":"Pedido de compra"} · ${p.conferido?"Conferido":"A conferir"}</div>
   </div>
   <div class="sec-title" style="margin-bottom:6px">Parcelas</div>
-  ${ps.length?`<div class="tbl-wrap"><table><thead><tr><th>Parcela</th><th>Prazo</th><th>Vencimento</th><th class="r">Valor</th></tr></thead><tbody>${ps.map(x=>`<tr><td>${x.n}/${x.total}</td><td>${x.dias} dias</td><td class="num">${fmtD(x.venc)}</td><td class="r num">${brl(x.valor)}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">Sem data de faturamento para calcular parcelas.</p>`}
+  ${ps.length?`<div class="tbl-wrap"><table><thead><tr><th>Parcela</th><th>Prazo</th><th>Vencimento</th><th>Situação</th><th class="r">Valor</th></tr></thead><tbody>${ps.map(x=>`<tr${pagas(p).includes(x.n)?' class="paid"':""}><td>${x.n}/${x.total}</td><td>${x.dias} dias</td><td class="num">${fmtD(x.venc)}</td><td>${pagas(p).includes(x.n)?"Pago":"Em aberto"}</td><td class="r num">${brl(x.valor)}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">Sem data de faturamento para calcular parcelas.</p>`}
   ${p.itens?.length?`<div class="sec-title" style="margin:18px 0 6px">Itens</div><div class="tbl-wrap"><table><thead><tr><th>Descrição</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th></tr></thead><tbody>${p.itens.map(x=>`<tr><td>${esc(x.descricao)}</td><td class="r num">${x.quantidade}</td><td class="r num">${brl(x.valor_unitario)}</td><td class="r num">${brl(x.quantidade*x.valor_unitario)}</td></tr>`).join("")}</tbody></table></div>`:""}
   ${p.observacoes?`<div class="sec-title" style="margin:18px 0 6px">Observações</div><p style="margin:0;white-space:pre-wrap">${esc(p.observacoes)}</p>`:""}
   <div class="mfoot"><button class="btn" data-close>Fechar</button><button class="btn primary" id="vEdit">${ic.edit} Editar</button></div>`);
@@ -830,36 +867,86 @@ function modalVer(p){
 }
 
 /* Contas a pagar */
+function todasContas(){
+  const out=[];
+  for(const p of S.pedidos){ if(!ativo(p)) continue; const cat=categoria(p);
+    for(const x of parcelas(p)) out.push({k:`b:${p.id}:${x.n}`,origem:"boleto",pid:p.id,n:x.n,venc:x.venc,desc:p.fornecedor,ref:p.numero_pedido?`#${p.numero_pedido}`:"",parc:`${x.n}/${x.total}`,valor:x.valor,tipo:cat,pago:pagas(p).includes(x.n)}); }
+  for(const c of S.contas) out.push({k:`c:${c.id}`,origem:"conta",id:c.id,venc:c.vencimento||"",desc:c.descricao,ref:c.mensal?"mensal":"",parc:"",valor:+c.valor||0,tipo:"conta",pago:!!c.pago});
+  return out.sort((a,b)=>a.venc.localeCompare(b.venc)||b.valor-a.valor);
+}
 function vContas(v){
-  const meses=[...new Set(S.contas.map(c=>ym(c.vencimento)).filter(Boolean))].sort();
-  const sel=S.cf.mes; const l=S.contas.filter(c=> sel==="todos" || (sel==="abertas"? !c.pago : ym(c.vencimento)===sel)).sort((a,b)=>(a.vencimento||"").localeCompare(b.vencimento||""));
-  const tot=l.reduce((a,c)=>a+(+c.valor||0),0), aberto=l.filter(c=>!c.pago).reduce((a,c)=>a+(+c.valor||0),0);
   const hoje=today.toISOString().slice(0,10);
-  const vencidas=S.contas.filter(c=>!c.pago&&c.vencimento&&c.vencimento<hoje);
+  const todas=todasContas();
+  if(!S.cf.mes||S.cf.mes==="todos") S.cf.mes=ymKey(today.getFullYear(),today.getMonth());
+  const f=S.cf, q=(f.q||"").trim().toLowerCase();
+  const l=todas.filter(x=>{
+    if(f.mes==="abertas"&&x.pago) return false;
+    if(f.mes==="vencidas"&&(x.pago||!(x.venc<hoje))) return false;
+    if(/^\d{4}-\d{2}$/.test(f.mes)&&ym(x.venc)!==f.mes) return false;
+    if(f.tipo==="boleto"&&x.origem!=="boleto") return false;
+    if(f.tipo==="conta"&&x.origem!=="conta") return false;
+    if(q&&!(`${x.desc} ${x.ref}`.toLowerCase().includes(q))) return false;
+    return true; });
+  const soma=a=>a.reduce((t,x)=>t+x.valor,0);
+  const tot=soma(l), pago=soma(l.filter(x=>x.pago)), venc=l.filter(x=>!x.pago&&x.venc&&x.venc<hoje);
+  const mesesSet=new Set(todas.map(x=>ym(x.venc)).filter(Boolean)); const y=today.getFullYear();
+  for(let ano=y; ano<=y+2; ano++) for(let m=0;m<12;m++) mesesSet.add(ymKey(ano,m));
+  const meses=[...mesesSet].sort();
+  const anosLanc=anosDisponiveis().filter(a=>a>=y-1);
+  const nomeMes=m=>`${MESES[+m.slice(5)-1]} ${m.slice(0,4)}`;
   v.innerHTML=`
-  <div class="head"><div><h1>Contas a Pagar</h1><p class="sub">Despesas que entram no comprometido do mês junto com as parcelas dos pedidos</p></div></div>
-  <div class="kpis k3">
-    <div class="card kpi"><div class="kpi-top">Total ${sel==="todos"?"geral":"no filtro"} ${ic.wallet}</div><div class="big">${brl(tot)}</div><div class="mini">${l.length} lançamentos</div></div>
-    <div class="card kpi"><div class="kpi-top">Em aberto ${ic.trend}</div><div class="big">${brl(aberto)}</div><div class="mini">${brl(tot-aberto)} já pagos</div></div>
-    <div class="card kpi"><div class="kpi-top">Vencidas ${ic.warn}</div><div class="big ${vencidas.length?"neg":""}">${brl(vencidas.reduce((a,c)=>a+(+c.valor||0),0))}</div><div class="mini">${vencidas.length} conta${vencidas.length===1?"":"s"} sem baixa</div></div>
+  <div class="head"><div><h1>Contas a Pagar</h1><p class="sub">Boletos dos pedidos (gerados automaticamente pela condição de pagamento) e contas avulsas</p></div></div>
+  <div class="kpis">
+    <div class="card kpi"><div class="kpi-top">Total ${/^\d{4}-\d{2}$/.test(f.mes)?"de "+MESES[+f.mes.slice(5)-1]:"no filtro"} ${ic.wallet}</div><div class="big">${brl(tot)}</div><div class="mini">${l.filter(x=>x.origem==="boleto").length} boletos · ${l.filter(x=>x.origem==="conta").length} contas</div></div>
+    <div class="card kpi"><div class="kpi-top">Em aberto ${ic.trend}</div><div class="big">${brl(tot-pago)}</div><div class="mini">${l.filter(x=>!x.pago).length} a pagar</div></div>
+    <div class="card kpi"><div class="kpi-top">Pago ${ic.check}</div><div class="big pos">${brl(pago)}</div><div class="mini">${l.filter(x=>x.pago).length} com baixa</div></div>
+    <div class="card kpi"><div class="kpi-top">Vencidas ${ic.warn}</div><div class="big ${venc.length?"neg":""}">${brl(soma(venc))}</div><div class="mini">${venc.length} sem baixa</div></div>
   </div>
   <div class="card pad" style="display:flex;flex-direction:column;gap:12px">
-    <div class="boxed"><span class="lab">Lançamento por mês</span>
-      <div class="form-row" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,1fr) auto"><select class="f" id="lmMes"><option value="">Selecione o mês</option>${MESES.map((n,i)=>`<option value="${ymKey(S.ano,i)}">${n} ${S.ano}</option>`).join("")}</select>
-      <input class="f" id="lmDesc" placeholder="Descrição (ex: Folha, aluguel, impostos)"><input class="f" id="lmVal" inputmode="decimal" placeholder="Valor total do mês (R$)"><button class="btn primary" id="lmAdd" aria-label="Lançar mês" style="width:52px;padding:0">${ic.plus}</button></div></div>
-    <div class="form-row"><input class="f" id="cDesc" placeholder="Descrição (ex: Parcela 3 — fornecedor)"><input class="f" id="cVal" inputmode="decimal" placeholder="Valor (R$)"><input class="f" type="date" id="cDt" aria-label="Vencimento"><button class="btn primary" id="cAdd" aria-label="Adicionar conta" style="width:52px;padding:0">${ic.plus}</button></div>
-    <div class="toolbar" style="align-items:center;justify-content:space-between"><span class="sec-title">Lançamentos</span>
-      <select class="f" id="cfm" style="flex:0 1 220px" aria-label="Filtrar"><option value="todos">Todos</option><option value="abertas" ${sel==="abertas"?"selected":""}>Somente em aberto</option>${meses.map(m=>`<option value="${m}" ${sel===m?"selected":""}>${MESES[+m.slice(5)-1]} ${m.slice(0,4)}</option>`).join("")}</select></div>
-    ${l.length?`<div class="tbl-wrap"><table><thead><tr><th style="width:40px">Pago</th><th>Descrição</th><th>Vencimento</th><th class="r">Valor</th><th style="width:40px"></th></tr></thead><tbody>
-    ${l.map(c=>`<tr class="${c.pago?"paid":""}"><td><button class="check ${c.pago?"on":""}" data-cpago="${c.id}" aria-pressed="${!!c.pago}" title="Marcar como pago">${c.pago?ic.ok:""}</button></td><td><span class="desc">${esc(c.descricao)}</span>${!c.pago&&c.vencimento<hoje?` <span class="tag late">VENCIDA</span>`:""}</td><td class="num">${fmtD(c.vencimento)}</td><td class="r num" style="font-weight:600">${brl(c.valor)}</td><td><button class="icon-btn" data-cdel="${c.id}" title="Excluir">${ic.trash}</button></td></tr>`).join("")}
-    </tbody></table></div>`:`<div class="empty">${ic.wallet}<b>${!S.loaded.c?"Carregando…":"Nenhuma conta neste filtro"}</b>Lance uma conta acima, ou o total de um mês.</div>`}
+    <div class="boxed"><span class="lab">Lançar conta avulsa</span>
+      <div class="form-row"><input class="f" id="cDesc" placeholder="Descrição (ex: Aluguel, folha, impostos)"><input class="f" id="cVal" inputmode="decimal" placeholder="Valor (R$)"><input class="f" type="date" id="cDt" aria-label="Vencimento"><button class="btn primary" id="cAdd" aria-label="Adicionar conta" style="width:52px;padding:0">${ic.plus}</button></div>
+      <div class="form-row lm" style="margin-top:8px">
+        <select class="f" id="lmMes" aria-label="Mês"><option value="">Total do mês: escolha o mês</option>${MESES.map((n,i)=>`<option value="${i}">${n}</option>`).join("")}</select>
+        <select class="f" id="lmAno" aria-label="Ano">${anosLanc.map(a=>`<option ${a===y?"selected":""}>${a}</option>`).join("")}</select>
+        <input class="f" id="lmDesc" placeholder="Descrição (opcional)"><input class="f" id="lmVal" inputmode="decimal" placeholder="Valor do mês (R$)">
+        <button class="btn primary" id="lmAdd" aria-label="Lançar total do mês" style="width:52px;padding:0">${ic.plus}</button></div></div>
+    <div class="toolbar" style="align-items:center">
+      <div class="search">${ic.search}<input class="f" id="cq" placeholder="Buscar fornecedor, pedido ou conta…" value="${esc(f.q||"")}"></div>
+      <button class="btn" id="cPrev" aria-label="Mês anterior" style="width:38px;padding:0" ${/^\d{4}-\d{2}$/.test(f.mes)?"":"disabled"}>‹</button>
+      <select class="f" id="cfm" style="flex:0 1 210px" aria-label="Período"><option value="abertas" ${f.mes==="abertas"?"selected":""}>Todas em aberto</option><option value="vencidas" ${f.mes==="vencidas"?"selected":""}>Vencidas</option><option value="tudo" ${f.mes==="tudo"?"selected":""}>Todos os meses</option>${meses.map(m=>`<option value="${m}" ${f.mes===m?"selected":""}>${nomeMes(m)}</option>`).join("")}</select>
+      <button class="btn" id="cNext" aria-label="Próximo mês" style="width:38px;padding:0" ${/^\d{4}-\d{2}$/.test(f.mes)?"":"disabled"}>›</button>
+      <select class="f" id="ctp" style="flex:0 1 160px" aria-label="Tipo"><option value="">Boletos e contas</option><option value="boleto" ${f.tipo==="boleto"?"selected":""}>Só boletos</option><option value="conta" ${f.tipo==="conta"?"selected":""}>Só contas</option></select>
+    </div>
+    ${l.length?`<div class="tbl-wrap"><table><thead><tr><th style="width:44px">Pago</th><th>Vencimento</th><th>Fornecedor / descrição</th><th>Pedido</th><th>Parcela</th><th>Tipo</th><th class="r">Valor</th><th style="width:40px"></th></tr></thead><tbody>
+    ${l.map(x=>{const t=TIPO_BOL[x.tipo]; const atras=!x.pago&&x.venc&&x.venc<hoje; return `<tr class="${x.pago?"paid":""}">
+      <td><button class="check ${x.pago?"on":""}" data-pg="${x.k}" aria-pressed="${x.pago}" title="${x.pago?"Pago — clique para desfazer":"Dar baixa"}">${x.pago?ic.ok:""}</button></td>
+      <td class="num">${fmtD(x.venc)}${atras?' <span class="tag late">VENCIDA</span>':""}</td>
+      <td><span class="desc" style="font-weight:600">${esc(x.desc)}</span></td><td class="num mini">${esc(x.ref)}</td><td class="num">${x.parc}</td>
+      <td><span class="bol-tipo" style="color:${t[1]};background:${t[2]}">${t[0]}</span></td>
+      <td class="r num" style="font-weight:600">${brl(x.valor)}</td>
+      <td>${x.origem==="conta"?`<button class="icon-btn" data-cdel="${x.id}" title="Excluir conta">${ic.trash}</button>`:`<button class="icon-btn" data-ver="${x.pid}" title="Ver pedido">${ic.eye}</button>`}</td></tr>`}).join("")}
+    </tbody><tfoot><tr><td colspan="6" style="font-weight:600">Total</td><td class="r num" style="font-weight:700">${brl(tot)}</td><td></td></tr></tfoot></table></div>`
+    :`<div class="empty">${ic.wallet}<b>${!S.loaded.c?"Carregando…":"Nada a pagar neste filtro"}</b>Os boletos aparecem sozinhos quando um pedido é cadastrado com condição de pagamento.</div>`}
   </div>`;
-  $("#cfm").onchange=e=>{S.cf.mes=e.target.value;render()};
-  $("#lmAdd").onclick=async()=>{ const m=$("#lmMes").value, val=parseNum($("#lmVal").value); if(!m||!val){toast("Escolha o mês e informe o valor");return;}
-    await guard(()=>api("salvarConta",{conta:{descricao:$("#lmDesc").value.trim()||`Lançamento mensal — ${MESES[+m.slice(5)-1]}`,valor:val,vencimento:m+"-01",pago:false,mensal:true,criado_em:Date.now()}}),"Mês lançado"); };
-  $("#cAdd").onclick=async()=>{ const d=$("#cDesc").value.trim(), val=parseNum($("#cVal").value), dt=$("#cDt").value; if(!d||!val||!dt){toast("Preencha descrição, valor e vencimento");return;}
-    await guard(()=>api("salvarConta",{conta:{descricao:d,valor:val,vencimento:dt,pago:false,criado_em:Date.now()}}),"Conta adicionada"); };
-  v.querySelectorAll("[data-cpago]").forEach(b=>b.onclick=()=>{ const c=S.contas.find(x=>x.id===b.dataset.cpago); c.pago=!c.pago; render(); guard(()=>api("atualizarConta",{id:c.id,campos:{pago:c.pago}})); });
+  const trava=async(btn,fn)=>{ if(btn.disabled) return; btn.disabled=true; const h=btn.innerHTML; btn.innerHTML='<span class="spin"></span>'; try{ return await fn(); } finally{ if(btn.isConnected){ btn.disabled=false; btn.innerHTML=h; } } };
+  const mover=d=>{ let y=+f.mes.slice(0,4), m=+f.mes.slice(5)-1+d; if(m<0){m=11;y--} if(m>11){m=0;y++} f.mes=ymKey(y,m); render(); };
+  $("#cfm").onchange=e=>{f.mes=e.target.value;render()};
+  $("#ctp").onchange=e=>{f.tipo=e.target.value;render()};
+  $("#cPrev").onclick=()=>mover(-1); $("#cNext").onclick=()=>mover(1);
+  let tq; $("#cq").oninput=e=>{clearTimeout(tq);tq=setTimeout(()=>{f.q=e.target.value;render()},200)};
+  $("#lmAdd").onclick=e=>trava(e.currentTarget,async()=>{ const mi=$("#lmMes").value, an=+$("#lmAno").value, val=parseNum($("#lmVal").value);
+    if(mi===""||!val){toast("Escolha o mês e informe o valor");return;}
+    const m=ymKey(an,+mi);
+    if(S.contas.some(c=>c.mensal&&ym(c.vencimento)===m&&Math.abs((+c.valor||0)-val)<0.01) && !e.currentTarget.dataset.ok){ toast("Já existe um lançamento igual neste mês. Clique de novo para lançar mesmo assim."); e.currentTarget.dataset.ok="1"; return; }
+    await guard(()=>api("salvarConta",{conta:{descricao:$("#lmDesc").value.trim()||`Lançamento mensal — ${nomeMes(m)}`,valor:val,vencimento:m+"-01",pago:false,mensal:true,criado_em:Date.now()}}),"Mês lançado"); });
+  $("#cAdd").onclick=e=>trava(e.currentTarget,async()=>{ const d=$("#cDesc").value.trim(), val=parseNum($("#cVal").value), dt=$("#cDt").value; if(!d||!val||!dt){toast("Preencha descrição, valor e vencimento");return;}
+    await guard(()=>api("salvarConta",{conta:{descricao:d,valor:val,vencimento:dt,pago:false,criado_em:Date.now()}}),"Conta adicionada"); });
+  v.querySelectorAll("[data-pg]").forEach(b=>b.onclick=()=>{
+    const x=todas.find(t=>t.k===b.dataset.pg); if(!x) return;
+    if(x.origem==="conta"){ const c=S.contas.find(c=>c.id===x.id); c.pago=!c.pago; render(); guard(()=>api("atualizarConta",{id:c.id,campos:{pago:c.pago}})); }
+    else { const p=S.pedidos.find(p=>p.id===x.pid); const ps=new Set(pagas(p)); ps.has(x.n)?ps.delete(x.n):ps.add(x.n); p.parcelas_pagas=[...ps].sort((a,b)=>a-b); render(); guard(()=>api("atualizarPedido",{id:p.id,campos:{parcelas_pagas:p.parcelas_pagas}})); }
+  });
+  v.querySelectorAll("[data-ver]").forEach(b=>b.onclick=()=>{ const p=S.pedidos.find(x=>x.id===b.dataset.ver); if(p) modalVer(p); });
   v.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{ if(b.classList.contains("armed")){ const cid=b.dataset.cdel; S.contas=S.contas.filter(x=>x.id!==cid); render(); guard(()=>api("excluirConta",{id:cid}),"Conta excluída"); return;} b.classList.add("armed"); b.textContent="Excluir?"; setTimeout(()=>{if(b.isConnected){b.classList.remove("armed");b.innerHTML=ic.trash}},3000); });
 }
 
@@ -943,7 +1030,7 @@ function showFila(){
     const p=i.p;
     return `<tr style="${i.incluir?"":"opacity:.5"}">
       <td><button class="check ${i.incluir?"on":""}" data-qinc="${i.k}" aria-pressed="${i.incluir}" title="Importar este pedido">${i.incluir?ic.ok:""}</button></td>
-      <td style="min-width:200px">${inp(i,"fornecedor",p.fornecedor)}<div class="mini" style="margin-top:3px">${esc(i.nome)}${p.itens.length?` · ${p.itens.length} itens`:""}${i.dup?' · <b style="color:var(--amber)">já cadastrado</b>':""}${!p.valor_total||!p.condicao_pagamento?' · <b style="color:var(--red)">confira valor e pagamento</b>':""}</div></td>
+      <td style="min-width:200px">${inp(i,"fornecedor",p.fornecedor)}<div class="mini" style="margin-top:3px">${esc(i.nome)}${p.itens.length?` · ${p.itens.length} itens`:""}${i.dup?' · <b style="color:var(--amber)">já cadastrado</b>':""}${!p.valor_total||!p.condicao_pagamento?' · <b style="color:var(--red)">confira valor e pagamento</b>':""}${!p.prazo_faturamento?' · boletos contados da data do pedido':""}</div>${chipsParcelas(p)}</td>
       <td>${inp(i,"numero_pedido",p.numero_pedido,"num")}</td>
       <td>${inp(i,"condicao_pagamento",p.condicao_pagamento)}</td>
       <td><input class="f" type="date" id="q${i.k}_prev" data-q="${i.k}" data-k="prazo_faturamento" value="${p.prazo_faturamento||""}" style="height:32px;font-size:13px"></td>
