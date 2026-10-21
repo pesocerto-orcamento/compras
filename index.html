@@ -230,7 +230,7 @@ tr.paid td .desc{text-decoration:line-through}
     <button class="nav" data-view="contas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><path d="M16 14h.01"/></svg>Contas a Pagar</button>
     <button class="nav" data-view="produtos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Produtos</button>
     <button class="nav" data-view="importar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></svg>Importar</button>
-    <div class="side-foot"><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
+    <div class="side-foot"><span class="mini" style="display:block;margin-bottom:6px">Versão 21/10 · boletos automáticos</span><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
   </nav>
   <main><div class="wrap" id="view"></div></main>
 </div>
@@ -302,7 +302,7 @@ function parseDate(v){
 }
 const addDays = (iso,n)=>{ const d=new Date(iso+"T12:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
 const prazos = cond => { const m = String(cond||"").match(/\d+/g); return m ? m.map(Number) : [0]; };
-const baseDate = p => p.data_faturamento || p.prazo_faturamento || p.data_pedido || "";
+const baseDate = p => p.data_faturamento || p.prazo_faturamento || p.data_pedido || (p.criado_em>1e12 ? new Date(+p.criado_em).toISOString().slice(0,10) : "");
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.append(t); setTimeout(()=>t.remove(),2600); }
 const ic = {
   eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -605,7 +605,7 @@ function openModal(html){
 }
 let itensTmp = [];
 function modalPedido(p){
-  const ed = !!p; p = p || {status:"orcamento",data_pedido:today.toISOString().slice(0,10)};
+  const ed = !!p; p = p || {status:"aprovado",data_pedido:today.toISOString().slice(0,10)};
   itensTmp = (p.itens||[]).map(x=>({...x}));
   openModal(`<div class="mhead"><h3>${ed?"Editar Pedido":"Novo Pedido"}</h3><button class="icon-btn" data-close aria-label="Fechar">${ic.x}</button></div>
   <form id="fp" class="grid2" novalidate>
@@ -874,10 +874,17 @@ function todasContas(){
   for(const c of S.contas) out.push({k:`c:${c.id}`,origem:"conta",id:c.id,venc:c.vencimento||"",desc:c.descricao,ref:c.mensal?"mensal":"",parc:"",valor:+c.valor||0,tipo:"conta",pago:!!c.pago});
   return out.sort((a,b)=>a.venc.localeCompare(b.venc)||b.valor-a.valor);
 }
+function avisoSemBoleto(){
+  const orc=S.pedidos.filter(p=>p.status==="orcamento");
+  const semDados=S.pedidos.filter(p=>ativo(p)&&(!(Number(p.valor_total)>0)||!String(p.condicao_pagamento||"").trim()));
+  if(!orc.length&&!semDados.length) return "";
+  const nomes=a=>a.slice(0,4).map(p=>esc(p.fornecedor)+(p.numero_pedido?" #"+esc(p.numero_pedido):"")).join(", ")+(a.length>4?` e mais ${a.length-4}`:"");
+  return `<div class="alert bad" style="padding:12px 16px">${ic.warn}<div><p style="color:var(--fg)">${orc.length?`<b style="display:inline">${orc.length} pedido${orc.length>1?"s":""} em "Em Orçamento"</b> não gera${orc.length>1?"m":""} boletos até ser aprovado: ${nomes(orc)}. `:""}${semDados.length?`<b style="display:inline">${semDados.length} sem valor ou condição de pagamento:</b> ${nomes(semDados)}.`:""} <button class="btn sm" id="irPedidos" style="margin-left:6px">Abrir Pedidos</button></p></div></div>`;
+}
 function vContas(v){
   const hoje=today.toISOString().slice(0,10);
   const todas=todasContas();
-  if(!S.cf.mes||S.cf.mes==="todos") S.cf.mes=ymKey(today.getFullYear(),today.getMonth());
+  if(!S.cf.mes||S.cf.mes==="todos") S.cf.mes="abertas";
   const f=S.cf, q=(f.q||"").trim().toLowerCase();
   const l=todas.filter(x=>{
     if(f.mes==="abertas"&&x.pago) return false;
@@ -917,6 +924,7 @@ function vContas(v){
       <button class="btn" id="cNext" aria-label="Próximo mês" style="width:38px;padding:0" ${/^\d{4}-\d{2}$/.test(f.mes)?"":"disabled"}>›</button>
       <select class="f" id="ctp" style="flex:0 1 160px" aria-label="Tipo"><option value="">Boletos e contas</option><option value="boleto" ${f.tipo==="boleto"?"selected":""}>Só boletos</option><option value="conta" ${f.tipo==="conta"?"selected":""}>Só contas</option></select>
     </div>
+    ${avisoSemBoleto()}
     ${l.length?`<div class="tbl-wrap"><table><thead><tr><th style="width:44px">Pago</th><th>Vencimento</th><th>Fornecedor / descrição</th><th>Pedido</th><th>Parcela</th><th>Tipo</th><th class="r">Valor</th><th style="width:40px"></th></tr></thead><tbody>
     ${l.map(x=>{const t=TIPO_BOL[x.tipo]; const atras=!x.pago&&x.venc&&x.venc<hoje; return `<tr class="${x.pago?"paid":""}">
       <td><button class="check ${x.pago?"on":""}" data-pg="${x.k}" aria-pressed="${x.pago}" title="${x.pago?"Pago — clique para desfazer":"Dar baixa"}">${x.pago?ic.ok:""}</button></td>
@@ -931,6 +939,7 @@ function vContas(v){
   const trava=async(btn,fn)=>{ if(btn.disabled) return; btn.disabled=true; const h=btn.innerHTML; btn.innerHTML='<span class="spin"></span>'; try{ return await fn(); } finally{ if(btn.isConnected){ btn.disabled=false; btn.innerHTML=h; } } };
   const mover=d=>{ let y=+f.mes.slice(0,4), m=+f.mes.slice(5)-1+d; if(m<0){m=11;y--} if(m>11){m=0;y++} f.mes=ymKey(y,m); render(); };
   $("#cfm").onchange=e=>{f.mes=e.target.value;render()};
+  $("#irPedidos")&&($("#irPedidos").onclick=()=>go("pedidos"));
   $("#ctp").onchange=e=>{f.tipo=e.target.value;render()};
   $("#cPrev").onclick=()=>mover(-1); $("#cNext").onclick=()=>mover(1);
   let tq; $("#cq").oninput=e=>{clearTimeout(tq);tq=setTimeout(()=>{f.q=e.target.value;render()},200)};
