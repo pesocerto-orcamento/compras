@@ -617,28 +617,191 @@ function renderItens(){
 }
 
 /* PDF -> Claude */
-async function pdfTexto(file){
-  if(!window.pdfjsLib) throw new Error("Leitor de PDF não carregou");
-  const pdf = await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
-  let out=""; for(let i=1;i<=Math.min(pdf.numPages,12);i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent();
-    let lastY=null; for(const it of tc.items){ const y=it.transform[5]; if(lastY!==null&&Math.abs(y-lastY)>3) out+="\n"; else if(lastY!==null) out+=" "; out+=it.str; lastY=y; } out+="\n\n"; }
+/* ---------- Leitura de PDF sem IA ---------- */
+const RX_MONEY = /(?<![\d,.])\d{1,3}(?:\.\d{3})*,\d{2,4}(?![\d,])/g;
+const RX_EMPRESA = /\b(LTDA|S\.?\s?A\.?|S\/A|EIRELI|EPP|INDUSTRIA|INDÚSTRIA|COMERCIO|COMÉRCIO|METALURGICA|METALÚRGICA|REPRESENTA[CÇ][OÕ]ES|DISTRIBUIDORA|IMPORTA[CÇ][AÃ]O)\b/i;
+const RX_CNPJ = /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/;
+const RX_DATA = /(?<!\d)(\d{2})[\/.-](\d{2})[\/.-](\d{4}|\d{2})(?!\d)/;
+const COMPRADOR = /PESO\s*CERTO/i;
+
+function limparEmpresa(s){
+  return s.replace(RX_CNPJ,"").replace(/\b(CNPJ|CPF|IE|I\.E\.|INSC\.?\s*EST\w*)\b.*$/i,"")
+    .replace(/^(fornecedor|emitente|vendedor|representada|fabricante|raz[aã]o\s+social|empresa)\s*[:\-]?\s*/i,"")
+    .replace(/\s{2,}/g," ").replace(/[\s\-:|]+$/,"").trim();
+}
+function condDe(s){
+  if (/[àa]\s*vista/i.test(s)) return "À vista";
+  const re = /(?<![\d\/.,])(\d{1,3}(?:\s*[\/\-]\s*\d{1,3}){1,15})(?![\d\/.,])/g; let m;
+  while((m = re.exec(s))){
+    const ns = m[1].split(/\s*[\/\-]\s*/).map(Number);
+    if (ns.every((n,i)=> i===0 || n>ns[i-1]) && ns[ns.length-1] >= 7) return ns.join("/") + " dias";
+  }
+  const um = s.match(/(?<![\d\/])(\d{1,3})\s*(dias|dd)\b/i);
+  if (um && +um[1] >= 7) return um[1] + " dias";
+  return "";
+}
+function dataDe(s, rotulo){
+  let ini = 0; if (rotulo){ const m = s.match(rotulo); if (m) ini = m.index + m[0].length; }
+  const re = new RegExp(RX_DATA.source, "g"); re.lastIndex = ini; let m;
+  while((m = re.exec(s))){
+    const d=+m[1], mo=+m[2], y = m[3].length===2 ? 2000 + +m[3] : +m[3];
+    if (d>=1 && d<=31 && mo>=1 && mo<=12 && y>=2015 && y<=2040) return `${y}-${m[2]}-${m[1]}`;
+  }
+  return "";
+}
+
+function lerPedidoTexto(txt, nomeArquivo){
+  const linhas = txt.split("\n").map(l=>l.replace(/\t/g,"   ").replace(/ {3,}/g,"\u0001").replace(/\s+/g," ").replace(/\u0001/g,"   ").trim()).filter(Boolean);
+  const r = {fornecedor:"",numero_pedido:"",valor_total:0,condicao_pagamento:"",data_pedido:"",prazo_faturamento:"",itens:[]};
+
+  /* Fornecedor: rótulo explícito, senão primeira razão social que não seja a Peso Certo */
+  for (let i=0;i<linhas.length && !r.fornecedor;i++){
+    const m = linhas[i].match(/\b(fornecedor|representada|fabricante|emitente)\b\s*[:\-]?\s*(.*)$/i);
+    if (m){ const cand = limparEmpresa((m[2] || linhas[i+1] || "").split(/ {3,}/)[0]); if (cand.length>3 && !COMPRADOR.test(cand) && /[A-Za-z]{3}/.test(cand)) r.fornecedor = cand; }
+  }
+  if (!r.fornecedor){
+    for (const l of linhas.slice(0,60)){
+      if (COMPRADOR.test(l) || !RX_EMPRESA.test(l)) continue;
+      if (/\b(rua|av\.|avenida|cep|telefone|fone|e-?mail|www\.|bairro)\b/i.test(l)) continue;
+      const col = l.split(/ {3,}/).find(c=>RX_EMPRESA.test(c) && !COMPRADOR.test(c)); if (!col) continue;
+      const cand = limparEmpresa(col); if (cand.length>4 && cand.length<90){ r.fornecedor = cand; break; }
+    }
+  }
+
+  /* Número do pedido / orçamento */
+  const rxNum = /\b(pedido|or[cç]amento|proposta|cota[cç][aã]o|ped\.)\s*(?:de\s+(?:venda|compra))?\s*(?:n[º°o.]*|nr\.?|n[uú]mero|#)?\s*[:\-]?\s*#?\s*([A-Z]{0,4}\d[\w\-\/.]{1,24})/i;
+  for (const l of linhas){ const m = l.match(rxNum); if (m && !RX_DATA.test(m[2]) && !/^\d{1,2}$/.test(m[2])){ r.numero_pedido = m[2].replace(/[.\-\/]+$/,""); break; } }
+  if (!r.numero_pedido){ const m = String(nomeArquivo||"").match(/#\s*([A-Z0-9\-]{3,})/i) || String(nomeArquivo||"").match(/(\d{4,})/); if (m) r.numero_pedido = m[1]; }
+
+  /* Valor total: maior valor em linhas de total; senão maior valor do documento */
+  let melhor = 0;
+  linhas.forEach((l,i)=>{
+    if (!/\btotal\b/i.test(l) || /\b(sub\s*-?\s*total|total\s+(dos\s+)?(itens|produtos|ipi|icms|st|frete|desconto|de\s+itens)|qtd|quantidade)\b/i.test(l)) return;
+    const vals = (l.match(RX_MONEY) || (linhas[i+1]||"").match(RX_MONEY) || []).map(parseNum);
+    vals.forEach(v=>{ if (v>melhor) melhor=v; });
+  });
+  if (!melhor){ (txt.match(RX_MONEY)||[]).map(parseNum).forEach(v=>{ if(v>melhor) melhor=v; }); }
+  r.valor_total = Math.round(melhor*100)/100;
+
+  /* Condição de pagamento: linhas com rótulo, depois a seguinte */
+  for (let i=0;i<linhas.length && !r.condicao_pagamento;i++){
+    if (/(pagamento|cond\.?\s*pgto|cond\.?\s*pag|condi[cçg][aã]o|prazo\s+de\s+pag|parcelas|vencimentos?)/i.test(linhas[i]))
+      r.condicao_pagamento = condDe(linhas[i]) || condDe(linhas[i+1]||"");
+  }
+
+  /* Datas */
+  for (let i=0;i<linhas.length;i++){
+    const l = linhas[i];
+    const rp = /(previs[aã]o|prazo\s+de\s+entrega|data\s+de\s+entrega|entrega\s+prevista|faturamento|embarque)/i;
+    const rd = /(data\s+(do\s+)?(pedido|emiss[aã]o|or[cç]amento)|emiss[aã]o|emitido\s+em|^data\b)/i;
+    if (!r.prazo_faturamento && rp.test(l)) r.prazo_faturamento = dataDe(l, rp) || dataDe(linhas[i+1]||"");
+    if (!r.data_pedido && rd.test(l)) r.data_pedido = dataDe(l, rd) || dataDe(linhas[i+1]||"");
+  }
+  if (!r.data_pedido){ for (const l of linhas){ const d=dataDe(l); if(d){ r.data_pedido=d; break; } } }
+
+  /* Itens: linhas com quantidade x unitário ≈ total */
+  const temDinheiro = l => /R\$/.test(l) || (l.match(RX_MONEY)||[]).length >= 2;
+  linhas.forEach((l,li)=>{ if (lerItem(l,li)===false) return; });
+  function lerItem(l,li){
+    if (/\b(sub\s*-?total|total|frete|desconto|ipi\s+total|base\s+de\s+c[aá]lculo|valor\s+do\s+icms)\b/i.test(l)) return;
+    const ms = [...l.matchAll(RX_MONEY)]; if (ms.length < 2) return;
+    const total = parseNum(ms[ms.length-1][0]);
+    let unit = 0, qtd = 0, corte = ms[0].index;
+    for (let k = ms.length-2; k >= 0 && !qtd; k--){
+      const u = parseNum(ms[k][0]); if (!u) continue;
+      const q = total / u;
+      if (q >= 0.98 && q < 100000 && Math.abs(q - Math.round(q)) < 0.02){ unit = u; qtd = Math.round(q); corte = ms[k].index; }
+    }
+    if (!qtd || !unit || total < 0.01) return;
+    let desc = l.slice(0, corte).replace(RX_MONEY, " ").replace(/R[$S]\s*(?=\s|$)/g," ").replace(/[|\[\]{}—–]+/g," ").replace(/\s{2,}/g," ").trim();
+    desc = desc.replace(/\s+\d+(?:[.,]\d+)?\s*(UNIDADES?|UN|UND|UNID|PC|PÇ|PCS|CX|KG|MT|M|JG|CJ|P[CÇ]\.?)?\.?\s*$/i,"");
+    desc = desc.replace(/[|\[\]{}—–]+/g," ").replace(/\s{2,}/g," ").trim();
+    let codigo = "";
+    const mc = desc.match(/^(\d{1,3})\s+([A-Z0-9][A-Z0-9.\-\/]{2,})(?:\s+|$)/i) && /\d/.test(RegExp.$2) ? desc.match(/^(\d{1,3})\s+([A-Z0-9][A-Z0-9.\-\/]{2,})(?:\s+|$)/i) : null;
+    if (mc){ codigo = mc[2]; desc = desc.slice(mc[0].length); }
+    else { const m2 = desc.match(/^([A-Z0-9][A-Z0-9.\-\/]{2,})(?:\s+|$)/i); if (m2 && /\d/.test(m2[1]) && (/^\d/.test(m2[1]) || /\d{3}/.test(m2[1]))){ codigo = m2[1]; desc = desc.slice(m2[0].length); } }
+    desc = desc.replace(/\b\d{8}\b/g," ").replace(/\s{2,}/g," ").trim();
+    if (!/[A-Za-zÀ-ú]{3}/.test(desc)){
+      desc = "";
+      /* descrição quebrada em linhas acima/abaixo da linha com os valores */
+      const viz = [linhas[li-1], linhas[li+1]].filter(x=> x && !temDinheiro(x) && /[A-Za-zÀ-ú]{3}/.test(x) && !/^(obs|#|c[oó]digo|item)\b/i.test(x));
+      desc = (desc + " " + viz.join(" ")).replace(/\s{2,}/g," ").trim();
+    }
+    if (desc.length < 3 || !/[A-Za-zÀ-ú]{3}/.test(desc)) return;
+    r.itens.push({codigo, descricao: desc, quantidade: qtd, valor_unitario: unit});
+  }
+  /* Encomenda e observações */
+  r.is_encomenda = /\bencomenda\b/i.test(txt);
+  const io = linhas.findIndex(l=>/^(informa[cçg][oõ]es\s+adicionais|observa[cçg](?:[oõ]es|[aã]o))\s*:?/i.test(l));
+  if (io >= 0){ const ob = [linhas[io].replace(/^[^:]*:\s*/,""), ...linhas.slice(io+1, io+4)].filter(Boolean).join(" ").replace(/\s{2,}/g," ").trim(); r.observacoes = ob.slice(0,300); }
+  return r;
+}
+
+async function abrirPdf(file){
+  if(!window.pdfjsLib) throw new Error("Leitor de PDF não carregou. Recarregue a página.");
+  return pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;
+}
+/* Texto do PDF organizado em linhas (de cima para baixo, da esquerda para a direita) */
+async function pdfTexto(pdf){
+  let out="";
+  for(let i=1;i<=Math.min(pdf.numPages,12);i++){
+    const pg=await pdf.getPage(i); const tc=await pg.getTextContent();
+    const its=tc.items.filter(t=>t.str && t.str.trim()).map(t=>({s:t.str,x:t.transform[4],y:t.transform[5],w:t.width||0}));
+    its.sort((a,b)=> b.y-a.y || a.x-b.x);
+    const linhas=[];
+    for(const it of its){ const l=linhas.find(l=>Math.abs(l.y-it.y)<=3); if(l) l.its.push(it); else linhas.push({y:it.y,its:[it]}); }
+    linhas.sort((a,b)=>b.y-a.y);
+    for(const l of linhas){ l.its.sort((a,b)=>a.x-b.x); let t="", fim=null;
+      for(const it of l.its){ if(fim!==null) t += (it.x-fim>12) ? "   " : " "; t+=it.s; fim=it.x+it.w; }
+      out+=t.trim()+"\n"; }
+    out+="\n";
+  }
   return out.slice(0,60000);
 }
-async function extrairPedido(file){
-    const txt = await pdfTexto(file);
-    if(txt.replace(/\s/g,"").length<40) throw new Error("PDF escaneado (imagem), sem texto para ler.");
-    const r = await api("extrairPdf",{texto:txt});
-    if(!r || typeof r!=="object") throw new Error("Não foi possível interpretar o pedido.");
-    return {fornecedor:String(r.fornecedor||"").trim(),numero_pedido:String(r.numero_pedido||"").trim(),valor_total:parseNum(r.valor_total),
-      condicao_pagamento:String(r.condicao_pagamento||"").trim(),data_pedido:parseDate(r.data_pedido),prazo_faturamento:parseDate(r.prazo_faturamento),data_faturamento:"",
-      status:"aprovado",is_encomenda:false,condicao_faturamento:"",observacoes:"",conferido:false,
-      itens:Array.isArray(r.itens)? r.itens.map(x=>({codigo:String(x.codigo||""),descricao:String(x.descricao||"").trim(),quantidade:parseNum(x.quantidade),valor_unitario:parseNum(x.valor_unitario)})).filter(x=>x.descricao) : []};
+/* PDF escaneado: reconhecimento de texto (OCR) no navegador */
+let ocrPronto=null;
+function carregarOcr(){
+  if(window.Tesseract) return Promise.resolve();
+  if(!ocrPronto) ocrPronto=new Promise((ok,err)=>{ const sc=document.createElement("script"); sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload=ok; sc.onerror=()=>{ocrPronto=null;err(new Error("Não foi possível carregar o leitor de PDF escaneado."))}; document.head.append(sc); });
+  return ocrPronto;
+}
+async function pdfOcr(pdf, avisar){
+  await carregarOcr();
+  const worker = await Tesseract.createWorker("por");
+  let out="";
+  try{
+    for(let i=1;i<=Math.min(pdf.numPages,4);i++){
+      avisar&&avisar(`lendo imagem da página ${i}…`);
+      const pg=await pdf.getPage(i); const vp=pg.getViewport({scale:2.8});
+      const cv=document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
+      await pg.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+      const {data}=await worker.recognize(cv); out+=data.text+"\n\n";
+    }
+  } finally { await worker.terminate(); }
+  return out;
+}
+async function extrairPedido(file, avisar){
+  const pdf = await abrirPdf(file);
+  let txt = await pdfTexto(pdf);
+  if(txt.replace(/\s/g,"").length<40){ avisar&&avisar("PDF escaneado, reconhecendo texto…"); txt = await pdfOcr(pdf, avisar); }
+  if(txt.replace(/\s/g,"").length<40) throw new Error("Não encontrei texto neste PDF. Cadastre o pedido manualmente.");
+  let r = lerPedidoTexto(txt, file.name);
+  /* Reforço opcional com IA, só se a chave estiver configurada no Apps Script */
+  if(!r.fornecedor || !r.valor_total || !r.condicao_pagamento){
+    try{ const ia = await api("extrairPdf",{texto:txt});
+      if(ia && typeof ia==="object") r = {...r, ...Object.fromEntries(Object.entries(ia).filter(([k,v])=> v && (!Array.isArray(v)||v.length)))}; }
+    catch(e){ /* sem chave de IA: segue com a leitura local */ }
+  }
+  return {fornecedor:String(r.fornecedor||"").trim(),numero_pedido:String(r.numero_pedido||"").trim(),valor_total:parseNum(r.valor_total),
+    condicao_pagamento:String(r.condicao_pagamento||"").trim(),data_pedido:parseDate(r.data_pedido),prazo_faturamento:parseDate(r.prazo_faturamento),data_faturamento:"",
+    status:"aprovado",is_encomenda:!!r.is_encomenda,condicao_faturamento:"",observacoes:String(r.observacoes||"").trim(),conferido:false,
+    itens:Array.isArray(r.itens)? r.itens.map(x=>({codigo:String(x.codigo||""),descricao:String(x.descricao||"").trim(),quantidade:parseNum(x.quantidade),valor_unitario:parseNum(x.valor_unitario)})).filter(x=>x.descricao) : []};
 }
 const isDup = p => S.pedidos.some(x=>x.numero_pedido&&x.numero_pedido===p.numero_pedido&&(x.fornecedor||"").toUpperCase()===(p.fornecedor||"").toUpperCase());
 async function lerPdf(file,after){
   const note=$("#pdfNote"); note.className="note"; note.style.color=""; note.innerHTML=`<span class="spin"></span> Lendo ${esc(file.name)}…`;
   try{
-    const r = await extrairPedido(file);
+    const r = await extrairPedido(file, m=>{ note.innerHTML=`<span class="spin"></span> ${esc(m)}`; });
     const set=(id,v)=>{ if(v!==undefined&&v!==null&&v!==""&&$("#"+id)) $("#"+id).value=v; };
     set("p_forn",r.fornecedor); set("p_num",r.numero_pedido);
     if(r.valor_total) set("p_val",Number(r.valor_total).toFixed(2).replace(".",","));
@@ -759,7 +922,7 @@ async function processarFila(){
   for(const it of fila){
     if(it.estado!=="espera") continue;
     it.estado="lendo"; showFila();
-    try{ it.p=await extrairPedido(it.file); it.dup=isDup(it.p); it.incluir=!it.dup; it.estado="ok"; }
+    try{ it.p=await extrairPedido(it.file, m=>{ it.msg=m; showFila(); }); it.dup=isDup(it.p); it.incluir=!it.dup; it.estado="ok"; }
     catch(e){ it.estado="erro"; it.erro = e?.message||"Falha na leitura"; }
     showFila();
   }
@@ -776,7 +939,7 @@ function showFila(){
     <div class="toolbar"><button class="btn" id="filaLimpar">Limpar lista</button><button class="btn primary" id="impGo" ${prontos.length&&!lendo?"":"disabled"}>Importar ${prontos.length} pedido${prontos.length===1?"":"s"}</button></div></div>
   <div class="tbl-wrap" style="margin-top:12px"><table class="items-tbl"><thead><tr><th style="width:40px"></th><th>Fornecedor</th><th style="width:130px">Nº</th><th style="width:150px">Pagamento</th><th style="width:150px">Prev. faturamento</th><th style="width:160px">Status</th><th style="width:90px">Encomenda</th><th class="r" style="width:130px">Valor (R$)</th><th style="width:40px"></th></tr></thead><tbody>
   ${fila.map(i=>{
-    if(i.estado!=="ok") return `<tr><td></td><td colspan="7"><b style="font-weight:600">${esc(i.nome)}</b> <span class="${i.estado==="erro"?"note err":"note"}">${i.estado==="erro"?esc(i.erro):i.estado==="lendo"?'<span class="spin" style="width:10px;height:10px"></span> lendo…':"na fila"}</span></td><td>${i.estado==="erro"?`<button class="btn sm" data-retry="${i.k}">Tentar de novo</button>`:""}</td><td><button class="icon-btn" data-qrm="${i.k}" aria-label="Remover">${ic.x}</button></td></tr>`;
+    if(i.estado!=="ok") return `<tr><td></td><td colspan="7"><b style="font-weight:600">${esc(i.nome)}</b> <span class="${i.estado==="erro"?"note err":"note"}">${i.estado==="erro"?esc(i.erro):i.estado==="lendo"?'<span class="spin" style="width:10px;height:10px"></span> '+esc(i.msg||"lendo…"):"na fila"}</span></td><td>${i.estado==="erro"?`<button class="btn sm" data-retry="${i.k}">Tentar de novo</button>`:""}</td><td><button class="icon-btn" data-qrm="${i.k}" aria-label="Remover">${ic.x}</button></td></tr>`;
     const p=i.p;
     return `<tr style="${i.incluir?"":"opacity:.5"}">
       <td><button class="check ${i.incluir?"on":""}" data-qinc="${i.k}" aria-pressed="${i.incluir}" title="Importar este pedido">${i.incluir?ic.ok:""}</button></td>
