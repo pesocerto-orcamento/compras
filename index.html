@@ -349,7 +349,7 @@ const metaDe = (y,m) => { const k=ymKey(y,m); return S.metas[k] ?? S.metaPadrao;
 
 /* ---------- Banco (Google Planilhas via Apps Script) ---------- */
 // Cole aqui a URL do App da Web do Apps Script (termina em /exec)
-const API_URL = "COLE_AQUI_A_URL_DO_APPS_SCRIPT";
+const API_URL = "https://script.google.com/macros/s/AKfycbzFemZXIZHXoxi7VNUkFEDiEXw4YMTR5eYglov_ZqplofQEZXwQw-CkpdJpwonkkQub/exec";
 async function api(action, payload={}){
   let r;
   try{ r = await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,pin:S.pin,...payload})}); }
