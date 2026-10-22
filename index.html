@@ -219,6 +219,9 @@ tr.paid td .desc{text-decoration:line-through}
 /* Modal */
 .scrim{position:fixed;inset:0;background:rgb(10 14 24 / .55);display:grid;place-items:center;z-index:50;padding:16px}
 .modal.wide{width:min(1060px,100%)}
+.erro-bar{position:fixed;left:0;right:0;bottom:0;z-index:80;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--red-soft);color:var(--fg);border-top:2px solid var(--red);padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));font-size:13px}
+.erro-bar svg{width:18px;height:18px;color:var(--red);flex:none}
+.erro-bar span{flex:1 1 240px}
 .wrap>*{min-width:0}
 .two>*,.alert>div{min-width:0}
 .row-mini>*{min-width:0}
@@ -285,7 +288,7 @@ tr.paid td .desc{text-decoration:line-through}
     <button class="nav" data-view="encomendas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Encomendas</button>
     <button class="nav" data-view="produtos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Produtos</button>
     <button class="nav" data-view="importar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></svg>Importar</button>
-    <div class="side-foot"><span class="mini" style="display:block;margin-bottom:6px">Versão 22/10 · cadastro, unidades e indicadores</span><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
+    <div class="side-foot"><span class="mini" style="display:block;margin-bottom:6px">Versão 22/10-b · lixeira, backup e trava de edição</span><span class="mini" id="bkp" style="display:block;margin-bottom:6px"></span><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
   </nav>
   <main><div class="wrap" id="view"></div></main>
 </div>
@@ -317,10 +320,13 @@ const STATUS = [
 const ST = Object.fromEntries(STATUS.map(s=>[s.v,s]));
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const MES3 = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const today = new Date();
+/* Datas sempre no horário local (Brasília) e recalculadas a cada uso: a aba pode ficar aberta de um dia para o outro */
+function agora(){ return new Date(); }
+function isoLocal(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function hojeISO(){ return isoLocal(new Date()); }
 const S = {
   view: "dashboard", pedidos: [], contas: [], metas: {}, metaPadrao: 150000,
-  ano: today.getFullYear(), mes: today.getMonth(), // dashboard
+  ano: agora().getFullYear(), mes: agora().getMonth(), // dashboard
   f: {q:"",status:"",conf:"",mes:"",ord:"recente",dir:"desc"},
   cf: {mes:"",tipo:"",q:""}, ef: {q:"",sit:"pend",forn:"",dest:""}, dtab: "geral", pq: "", pord: "valor",
   pin: "", live: false, loaded: {p:false,c:false,m:false}
@@ -349,16 +355,16 @@ function parseDate(v){
   if (typeof v === "number"){ // serial do Excel
     const d = new Date(Math.round((v-25569)*864e5)); return d.toISOString().slice(0,10);
   }
-  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if (v instanceof Date && !isNaN(v)) return isoLocal(v);
   const s = String(v).trim();
   let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (m){ let y = m[3].length===2 ? "20"+m[3] : m[3]; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[0];
   return "";
 }
-const addDays = (iso,n)=>{ const d=new Date(iso+"T12:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
+const addDays = (iso,n)=>{ const d=new Date(iso+"T12:00:00"); d.setDate(d.getDate()+n); return isoLocal(d); };
 const prazos = cond => { const m = String(cond||"").match(/\d+/g); return m ? m.map(Number) : [0]; };
-const baseDate = p => p.data_faturamento || p.prazo_faturamento || p.data_pedido || (p.criado_em>1e12 ? new Date(+p.criado_em).toISOString().slice(0,10) : "");
+const baseDate = p => p.data_faturamento || p.prazo_faturamento || p.data_pedido || (p.criado_em>1e12 ? isoLocal(new Date(+p.criado_em)) : "");
 function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg; document.body.append(t); setTimeout(()=>t.remove(),2600); }
 const ic = {
   eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -397,7 +403,7 @@ function parcelas(p){
   return ds.map((d,i)=>({n:i+1,total:n,dias:d,venc:addDays(b,d),valor:(i===n-1 ? tot-parte*(n-1) : parte)/100}));
 }
 function anosDisponiveis(){
-  const y=today.getFullYear(), set=new Set([y-1,y,y+1,y+2,y+3,S.ano]);
+  const y=agora().getFullYear(), set=new Set([y-1,y,y+1,y+2,y+3,S.ano]);
   S.pedidos.forEach(p=>parcelas(p).forEach(x=>set.add(+x.venc.slice(0,4))));
   S.contas.forEach(c=>{ if(c.vencimento) set.add(+c.vencimento.slice(0,4)); });
   return [...set].filter(Boolean).sort((a,b)=>a-b);
@@ -441,9 +447,11 @@ async function api(action, payload={}){
   return j.data;
 }
 async function carregar(silencioso){
+  if(silencioso) await filaEscrita;
   if(!silencioso) setSync(false,"Atualizando…");
   const d = await api("listar");
-  S.pedidos = (d.pedidos||[]).map(prepPedido); S.contas = d.contas||[];
+  S._foto = JSON.stringify({pedidos:d.pedidos||[], contas:d.contas||[]});
+  S.pedidos = (d.pedidos||[]).map(prepPedido); S.contas = d.contas||[]; S.backup = d.backup||null; mostrarBackup();
   if(!CAT.carregado && !CAT.carregando && !S._catPedido){ S._catPedido=true; carregarCatalogo(); }
   S.metas = {...((d.metas||{}).meses||{})}; if(d.metas?.padrao) S.metaPadrao = d.metas.padrao;
   S.loaded = {p:true,c:true,m:true};
@@ -479,13 +487,39 @@ $("#btnSair").onclick=()=>{ try{localStorage.removeItem("cp_pin")}catch(e){} S.p
 setInterval(()=>{ if(document.visibilityState==="visible" && S.pin && !$("#app").hidden && !$("#modalRoot").innerHTML && !filaRodando) carregar(true).catch(()=>{}); }, 60000);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible" && S.pin && !$("#app").hidden && !$("#modalRoot").innerHTML && !filaRodando) carregar(true).catch(()=>{}); });
 
+/* Gravações em fila (uma de cada vez, na ordem dos cliques). Se falhar, a tela volta ao que está salvo na planilha. */
+let filaEscrita = Promise.resolve();
+function enfileirar(fn){ const pr = filaEscrita.then(fn, fn); filaEscrita = pr.catch(()=>{}); return pr; }
 async function guard(fn, okMsg){
-  try{ await fn(); if(okMsg) toast(okMsg); await carregar(true); return true; }
-  catch(e){ if(e.code!=="pin") toast("Não foi possível salvar: "+e.message); return false; }
+  try{ await enfileirar(fn); naoSalvo(false); if(okMsg) toast(okMsg); await carregar(true).catch(()=>{}); return true; }
+  catch(e){
+    if(e.code==="pin") return false;
+    if(e.code==="conflito"){ toast(e.message+" Recarreguei os dados: confira e refaça a alteração."); await carregar(true).catch(()=>restaurarFoto()); return false; }
+    try{ await carregar(true); toast("Não foi possível salvar: "+e.message+". A tela voltou ao que está gravado."); }
+    catch(e2){ restaurarFoto(); naoSalvo(true); }
+    return false;
+  }
 }
-const savePedido = (id,data)=> guard(()=> api("salvarPedido",{pedido:{...data,id:id||""}}));
-function patchPedido(id,data){ const p=S.pedidos.find(x=>x.id===id); if(p){ Object.assign(p,data); prepPedido(p); render(); } return guard(()=> api("atualizarPedido",{id,campos:data})); }
-const delPedido = id => { S.pedidos=S.pedidos.filter(x=>x.id!==id); render(); return guard(()=> api("excluirPedido",{id}), "Pedido excluído"); };
+function mostrarBackup(){
+  const el=$("#bkp"); if(!el) return; const b=S.backup;
+  if(!b||!b.em){ el.innerHTML='<span style="color:var(--amber)">● Backup automático desligado</span>'; el.title="No Apps Script, rode a função ativarBackup uma vez."; return; }
+  const h=(Date.now()-b.em)/36e5;
+  el.innerHTML=`<span style="color:${h>50?"var(--red)":"var(--green)"}">●</span> Backup: ${new Date(b.em).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}`;
+  el.title=h>50?"O último backup tem mais de 2 dias. Confira o acionador no Apps Script.":"Cópia diária na pasta "+(b.nome||"Backups")+" do Drive";
+}
+function restaurarFoto(){ if(!S._foto) return; const d=JSON.parse(S._foto); S.pedidos=d.pedidos.map(prepPedido); S.contas=d.contas; render(); }
+function naoSalvo(on){
+  let b=$("#erroBar");
+  if(!on){ if(b) b.remove(); return; }
+  if(!b){ b=document.createElement("div"); b.id="erroBar"; b.className="erro-bar"; document.body.append(b); }
+  b.innerHTML=`${ic.warn}<span><b>Sem conexão com a planilha.</b> A última alteração <b>não foi salva</b> e a tela voltou ao último dado gravado. Confira a internet e faça de novo.</span><button class="btn sm" id="erroTenta">Tentar reconectar</button>`;
+  $("#erroTenta").onclick=()=>carregar().then(()=>{ naoSalvo(false); toast("Conectado de novo"); }).catch(()=>toast("Ainda sem conexão"));
+}
+const versaoDe = id => { const p=S.pedidos.find(x=>x.id===id); return p ? (p.versao||0) : undefined; };
+const savePedido = (id,data)=> guard(()=> api("salvarPedido",{pedido:{...data,id:id||""}, versao: id ? (data._versao ?? versaoDe(id)) : undefined}).then(v=>{ const p=id&&S.pedidos.find(x=>x.id===id); if(p&&typeof v==="number") p.versao=v; }));
+function patchPedido(id,data){ const p=S.pedidos.find(x=>x.id===id); if(p){ Object.assign(p,data); prepPedido(p); render(); }
+  return guard(()=> api("atualizarPedido",{id,campos:data,versao:versaoDe(id)}).then(v=>{ const q=S.pedidos.find(x=>x.id===id); if(q&&typeof v==="number") q.versao=v; })); }
+const delPedido = id => { S.pedidos=S.pedidos.filter(x=>x.id!==id); render(); return guard(()=> api("excluirPedido",{id}), "Pedido movido para a lixeira"); };
 async function saveMetas(){ return guard(()=> api("salvarMetas",{padrao:S.metaPadrao, meses:S.metas}), "Meta atualizada"); }
 
 /* ---------- Render ---------- */
@@ -515,7 +549,7 @@ function alertas(){
   const atr=unid(pend.filter(r=>sitLinha(r)[0]==="atraso"));
   const encSemPrev=pend.filter(r=>!prevEfetiva(r.x) && destinoLinha(r).e).reduce((a,r)=>a+destinoLinha(r).e,0);
   const precos=itensComPreco().filter(o=>o.dif>0.05);
-  const meses=[]; for(let k=0;k<6;k++){ const d=new Date(today.getFullYear(), today.getMonth()+k, 1); const y=d.getFullYear(), m=d.getMonth(); const c=compMes(y,m); if(c>metaDe(y,m)) meses.push(`${MES3[m]}/${String(y).slice(2)}`); }
+  const meses=[]; for(let k=0;k<6;k++){ const d=new Date(agora().getFullYear(), agora().getMonth()+k, 1); const y=d.getFullYear(), m=d.getMonth(); const c=compMes(y,m); if(c>metaDe(y,m)) meses.push(`${MES3[m]}/${String(y).slice(2)}`); }
   const fora=itensFora().length;
   const soma=a=>a.reduce((t,x)=>t+x.valor,0);
   const out=[];
@@ -611,7 +645,7 @@ function dCaixa(v){
   const h=hojeISO(), cs=todasContas().filter(x=>!x.pago&&x.venc), soma=a=>a.reduce((t,x)=>t+x.valor,0);
   const faixa=d=>cs.filter(x=>x.venc>=h&&x.venc<=addDays(h,d));
   const venc=cs.filter(x=>x.venc<h);
-  const meses=[]; for(let k=0;k<12;k++){ const d=new Date(today.getFullYear(), today.getMonth()+k, 1); const y=d.getFullYear(), m=d.getMonth(); meses.push({y,m,lab:`${MES3[m]}/${String(y).slice(2)}`,comp:compMes(y,m),meta:metaDe(y,m)}); }
+  const meses=[]; for(let k=0;k<12;k++){ const d=new Date(agora().getFullYear(), agora().getMonth()+k, 1); const y=d.getFullYear(), m=d.getMonth(); meses.push({y,m,lab:`${MES3[m]}/${String(y).slice(2)}`,comp:compMes(y,m),meta:metaDe(y,m)}); }
   /* prazo médio de pagamento: média dos prazos das parcelas ponderada pelo valor, pedidos dos últimos 12 meses */
   const desde=addDays(h,-365); let pv=0, pd=0;
   for(const p of S.pedidos){ if(!ativo(p)) continue; const b=p.data_pedido||baseDate(p); if(!b||b<desde) continue; for(const x of parcelas(p)){ pv+=x.valor; pd+=x.valor*x.dias; } }
@@ -739,6 +773,16 @@ function quadroBoletos(){
   ${bs.map(x=>{const t=TIPO_BOL[x.tipo];return `<tr${x.id?` data-ver="${x.id}" style="cursor:pointer"`:""}${x.pago?' class="paid"':""}><td class="num">${fmtD(x.venc)}</td><td style="font-weight:600">${esc(x.nome)}</td><td class="num mini">${esc(x.ref)}</td><td class="num">${x.parc}</td><td><span class="bol-tipo" style="color:${t[1]};background:${t[2]}">${t[0]}</span></td><td class="r num" style="font-weight:600">${brl(x.valor)}</td></tr>`}).join("")}
   </tbody></table></div>`:`<div class="empty" style="padding:28px">Nenhum boleto vencendo em ${MESES[S.mes]}.</div>`}</div>`;
 }
+async function abrirLixeira(){
+  openModal(`<div class="mhead"><h3>Lixeira</h3><button class="icon-btn" data-close aria-label="Fechar">${ic.x}</button></div><p class="mini" style="margin:-8px 0 12px">Pedidos e contas excluídos ficam aqui e podem ser restaurados.</p><div id="lxBox"><span class="spin"></span> Carregando…</div><div class="mfoot"><button class="btn" data-close>Fechar</button></div>`);
+  try{
+    const l = await api("listarLixeira");
+    const box=$("#lxBox"); if(!box) return;
+    box.innerHTML = l.length ? `<div class="tbl-wrap"><table><thead><tr><th>Excluído em</th><th>Tipo</th><th>Registro</th><th></th></tr></thead><tbody>${l.map(x=>`<tr><td class="num">${new Date(+x.excluido_em).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"})}</td><td>${x.aba==="Pedidos"?"Pedido":"Conta"}</td><td style="font-weight:600">${esc(x.resumo)}</td><td><button class="btn sm primary" data-rest="${esc(x.id)}">Restaurar</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="empty" style="padding:24px">A lixeira está vazia.</div>`;
+    box.querySelectorAll("[data-rest]").forEach(b=>b.onclick=async()=>{ b.disabled=true; b.innerHTML='<span class="spin"></span>';
+      if(await guard(()=>api("restaurar",{id:b.dataset.rest}),"Restaurado")) b.closest("tr").remove(); else { b.disabled=false; b.textContent="Restaurar"; } });
+  }catch(e){ const box=$("#lxBox"); if(box) box.innerHTML=`<p class="note err">${esc(e.message)}</p>`; }
+}
 function proxMeses(fl){
   const out=[]; for(let i=1;i<=3;i++){ const mi=S.mes+i; if(mi>11) break; const x=fl[mi]; const c=x.enc+x.com+x.fat+x.contas, mt=metaDe(S.ano,mi);
     out.push(`<div class="row-mini" style="padding:7px 0"><span class="d">${MESES[mi]}</span><span class="num" style="font-size:12.5px;color:${c>mt?"var(--red)":"var(--fg)"}">${brl(c)} <span class="d">/ ${brlK(mt)}</span></span></div>`);}
@@ -786,7 +830,7 @@ function vPedidos(v){
   const soma = l.reduce((a,p)=>a+(Number(p.valor_total)||0),0);
   v.innerHTML = `
   <div class="head"><div><h1>Pedidos</h1><p class="sub">${S.pedidos.length} pedidos cadastrados${l.length!==S.pedidos.length?` · ${l.length} no filtro`:""} · <span class="num">${brl(soma)}</span></p></div>
-    <button class="btn primary" id="novo">${ic.plus} Novo Pedido</button></div>
+    <div class="toolbar"><button class="btn" id="lixeira">${ic.trash} Lixeira</button><button class="btn primary" id="novo">${ic.plus} Novo Pedido</button></div></div>
   <div class="toolbar">
     <div class="search">${ic.search}<input class="f" id="fq" placeholder="Buscar por fornecedor ou número…" value="${esc(S.f.q)}"></div>
     <select class="f" id="fs" aria-label="Status"><option value="">Todos os status</option>${STATUS.map(s=>`<option value="${s.v}" ${S.f.status===s.v?"selected":""}>${s.l}</option>`).join("")}</select>
@@ -798,6 +842,7 @@ function vPedidos(v){
   <div class="olist">${l.length? l.map(rowPedido).join("") : `<div class="card empty">${ic.cart}<b>${loading()?"Carregando…":S.pedidos.length?"Nenhum pedido neste filtro":"Nenhum pedido cadastrado"}</b>${S.pedidos.length?"Ajuste os filtros acima.":"Importe os PDFs na aba Importar ou clique em Novo Pedido."}</div>`}</div>`;
   $("#fo").value=S.f.ord;
   $("#novo").onclick=()=>modalPedido();
+  $("#lixeira").onclick=abrirLixeira;
   let t; $("#fq").oninput=e=>{clearTimeout(t);t=setTimeout(()=>{S.f.q=e.target.value;render()},180)};
   $("#fs").onchange=e=>{S.f.status=e.target.value;render()};
   $("#fc").onchange=e=>{S.f.conf=e.target.value;render()};
@@ -807,7 +852,7 @@ function vPedidos(v){
   v.querySelectorAll("[data-act]").forEach(b=>b.addEventListener(b.tagName==="SELECT"?"change":"click",onAct));
 }
 function rowPedido(p){
-  const s=ST[p.status]||ST.orcamento; const atras = p.prazo_faturamento && !p.data_faturamento && p.status==="aprovado" && p.prazo_faturamento < today.toISOString().slice(0,10);
+  const s=ST[p.status]||ST.orcamento; const atras = p.prazo_faturamento && !p.data_faturamento && p.status==="aprovado" && p.prazo_faturamento < hojeISO();
   return `<div class="card order">
     <button class="check ${p.conferido?"on":""}" data-act="conf" data-id="${p.id}" title="${p.conferido?"Conferido":"Marcar como conferido"}" aria-pressed="${!!p.conferido}">${p.conferido?ic.ok:""}</button>
     <div style="min-width:0"><div class="o-name"><span class="nm">${esc(p.fornecedor)}</span>${p.numero_pedido?`<span class="no">#${esc(p.numero_pedido)}</span>`:""}${(()=>{const r=resumoDestino(p); return r.e&&!r.v?`<span class="tag">ENCOMENDA</span>`:r.e?`<span class="tag" title="${r.e} encomenda · ${r.v} venda">MISTO ${r.e}/${r.e+r.v}</span>`:p.is_encomenda&&!(p.itens||[]).length?`<span class="tag">ENCOMENDA</span>`:""})()}${atras?`<span class="tag late">ATRASADO</span>`:""}</div>
@@ -821,12 +866,12 @@ function onAct(e){
   const b=e.currentTarget, id=b.dataset.id, p=S.pedidos.find(x=>x.id===id); if(!p) return;
   const a=b.dataset.act;
   if(a==="conf") patchPedido(id,{conferido:!p.conferido});
-  if(a==="status"){ const d={status:b.value}; if(b.value==="faturado"&&!p.data_faturamento) d.data_faturamento=p.prazo_faturamento||today.toISOString().slice(0,10); patchPedido(id,d); }
+  if(a==="status"){ const d={status:b.value}; if(b.value==="faturado"&&!p.data_faturamento) d.data_faturamento=p.prazo_faturamento||hojeISO(); patchPedido(id,d); }
   if(a==="ver") modalVer(p);
   if(a==="edit") modalPedido(p);
   if(a==="del"){
     if(b.classList.contains("armed")) { delPedido(id); return; }
-    b.classList.add("armed"); b.textContent="Excluir?"; setTimeout(()=>{ if(b.isConnected){ b.classList.remove("armed"); b.innerHTML=ic.trash; } },3000);
+    b.classList.add("armed"); b.textContent="Mover p/ lixeira?"; setTimeout(()=>{ if(b.isConnected){ b.classList.remove("armed"); b.innerHTML=ic.trash; } },3000);
   }
 }
 
@@ -841,7 +886,7 @@ function openModal(html){
 }
 let itensTmp = [];
 function modalPedido(p){
-  const ed = !!p; p = p || {status:"aprovado",data_pedido:today.toISOString().slice(0,10)};
+  const ed = !!p; p = p || {status:"aprovado",data_pedido:hojeISO()}; const versaoAberta = p.versao||0;
   itensTmp = (p.itens||[]).map(x=>{ const y={...x, unidades:(x.unidades||[]).map(u=>({...u}))}; prepItem(y,p); if(!y.cod_produto && y.vinculo!=="novo_ok"){ y.vinculo=""; vincularItem(y,p.fornecedor||""); } return y; });
   openModal(`<div class="mhead"><h3>${ed?"Editar Pedido":"Novo Pedido"}</h3><button class="icon-btn" data-close aria-label="Fechar">${ic.x}</button></div>
   <form id="fp" class="grid2" novalidate>
@@ -874,11 +919,12 @@ function modalPedido(p){
   $("#pSave").onclick=async()=>{
     const d={fornecedor:$("#p_forn").value.trim(),numero_pedido:$("#p_num").value.trim(),valor_total:parseNum($("#p_val").value),condicao_pagamento:$("#p_cond").value.trim(),
       data_pedido:$("#p_dped").value,prazo_faturamento:$("#p_prev").value,data_faturamento:$("#p_dfat").value,status:$("#p_st").value,condicao_faturamento:$("#p_cfat").value.trim(),
-      is_encomenda: itensTmp.length ? itensTmp.some(x=>(x.unidades||[]).some(u=>u.tipo==="encomenda")) : !!p.is_encomenda, observacoes:$("#p_obs").value.trim(),itens:itensTmp.filter(x=>x.descricao).map(limparItem),conferido:!!p.conferido,parcelas_pagas:pagas(p),criado_em:p.criado_em||Date.now()};
+      is_encomenda: itensTmp.length ? itensTmp.some(x=>(x.unidades||[]).some(u=>u.tipo==="encomenda")) : !!p.is_encomenda, observacoes:$("#p_obs").value.trim(),itens:itensTmp.filter(x=>x.descricao).map(limparItem),conferido:!!p.conferido,parcelas_pagas:pagas(p),criado_em:p.criado_em||Date.now(), _versao: versaoAberta};
     const err=[]; if(!d.fornecedor) err.push("fornecedor"); if(!d.valor_total) err.push("valor total"); if(!d.condicao_pagamento) err.push("condição de pagamento");
     if(err.length){ const e=$("#pErr"); e.hidden=false; e.textContent="Preencha: "+err.join(", ")+"."; return; }
     $("#pSave").disabled=true;
-    if(await savePedido(ed?p.id:null,d)){ closeModal(); toast(ed?"Pedido atualizado":"Pedido criado"); } else $("#pSave").disabled=false;
+    const {_versao, ...dados} = d; dados._versao=_versao;
+    if(await savePedido(ed?p.id:null,dados)){ closeModal(); toast(ed?"Pedido atualizado":"Pedido criado"); } else $("#pSave").disabled=false;
   };
 }
 /* ===================== Catálogo de produtos (Microvix) e vínculo PDF -> produto ===================== */
@@ -1034,7 +1080,6 @@ function vincHtml(x, i){
 
 /* ===================== Unidades: cada unidade é encomenda ou venda ===================== */
 const AGRUPA = 10; // acima disso o item aparece agrupado, com o botão "Separar unidades"
-const hojeISO = () => today.toISOString().slice(0,10);
 const diasEntre=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
 function unidadesDe(x, p){
   const q = Math.max(0, Math.min(5000, Math.round(+x.quantidade||0)));
@@ -1345,7 +1390,7 @@ async function extrairPedidoBruto(file, avisar){
     condicao_pagamento:String(r.condicao_pagamento||"").trim(),data_pedido:parseDate(r.data_pedido),prazo_faturamento:parseDate(r.prazo_faturamento),data_faturamento:"",
     status:"aprovado",is_encomenda:!!r.is_encomenda,cliente_encomenda:r.cliente_encomenda||"",condicao_faturamento:"",observacoes:String(r.observacoes||"").trim(),conferido:false,
     itens:Array.isArray(r.itens)? r.itens.map(x=>({codigo:String(x.codigo||""),descricao:String(x.descricao||"").trim(),quantidade:Math.round(parseNum(x.quantidade)),valor_unitario:parseNum(x.valor_unitario),voltagem:x.voltagem||"",
-      previsao_chegada: parseDate(x.previsao_chegada) || r.data_entrega || (r.prazo_entrega_dias ? addDays(parseDate(r.data_pedido)||today.toISOString().slice(0,10), r.prazo_entrega_dias) : "")})).filter(x=>x.descricao) : []};
+      previsao_chegada: parseDate(x.previsao_chegada) || r.data_entrega || (r.prazo_entrega_dias ? addDays(parseDate(r.data_pedido)||hojeISO(), r.prazo_entrega_dias) : "")})).filter(x=>x.descricao) : []};
 }
 const isDup = p => S.pedidos.some(x=>x.numero_pedido&&x.numero_pedido===p.numero_pedido&&(x.fornecedor||"").toUpperCase()===(p.fornecedor||"").toUpperCase());
 async function lerPdf(file,after){
@@ -1395,7 +1440,7 @@ function avisoSemBoleto(){
   return `<div class="alert bad" style="padding:12px 16px">${ic.warn}<div><p style="color:var(--fg)">${orc.length?`<b style="display:inline">${orc.length} pedido${orc.length>1?"s":""} em "Em Orçamento"</b> não gera${orc.length>1?"m":""} boletos até ser aprovado: ${nomes(orc)}. `:""}${semDados.length?`<b style="display:inline">${semDados.length} sem valor ou condição de pagamento:</b> ${nomes(semDados)}.`:""} <button class="btn sm" id="irPedidos" style="margin-left:6px">Abrir Pedidos</button></p></div></div>`;
 }
 function vContas(v){
-  const hoje=today.toISOString().slice(0,10);
+  const hoje=hojeISO();
   const todas=todasContas();
   if(!S.cf.mes||S.cf.mes==="todos") S.cf.mes="abertas";
   const f=S.cf, q=(f.q||"").trim().toLowerCase();
@@ -1409,7 +1454,7 @@ function vContas(v){
     return true; });
   const soma=a=>a.reduce((t,x)=>t+x.valor,0);
   const tot=soma(l), pago=soma(l.filter(x=>x.pago)), venc=l.filter(x=>!x.pago&&x.venc&&x.venc<hoje);
-  const mesesSet=new Set(todas.map(x=>ym(x.venc)).filter(Boolean)); const y=today.getFullYear();
+  const mesesSet=new Set(todas.map(x=>ym(x.venc)).filter(Boolean)); const y=agora().getFullYear();
   for(let ano=y; ano<=y+2; ano++) for(let m=0;m<12;m++) mesesSet.add(ymKey(ano,m));
   const meses=[...mesesSet].sort();
   const anosLanc=anosDisponiveis().filter(a=>a>=y-1);
@@ -1469,7 +1514,7 @@ function vContas(v){
     else { const p=S.pedidos.find(p=>p.id===x.pid); const ps=new Set(pagas(p)); ps.has(x.n)?ps.delete(x.n):ps.add(x.n); p.parcelas_pagas=[...ps].sort((a,b)=>a-b); render(); guard(()=>api("atualizarPedido",{id:p.id,campos:{parcelas_pagas:p.parcelas_pagas}})); }
   });
   v.querySelectorAll("[data-ver]").forEach(b=>b.onclick=()=>{ const p=S.pedidos.find(x=>x.id===b.dataset.ver); if(p) modalVer(p); });
-  v.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{ if(b.classList.contains("armed")){ const cid=b.dataset.cdel; S.contas=S.contas.filter(x=>x.id!==cid); render(); guard(()=>api("excluirConta",{id:cid}),"Conta excluída"); return;} b.classList.add("armed"); b.textContent="Excluir?"; setTimeout(()=>{if(b.isConnected){b.classList.remove("armed");b.innerHTML=ic.trash}},3000); });
+  v.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{ if(b.classList.contains("armed")){ const cid=b.dataset.cdel; S.contas=S.contas.filter(x=>x.id!==cid); render(); guard(()=>api("excluirConta",{id:cid}),"Conta movida para a lixeira"); return;} b.classList.add("armed"); b.textContent="Excluir?"; setTimeout(()=>{if(b.isConnected){b.classList.remove("armed");b.innerHTML=ic.trash}},3000); });
 }
 
 /* ===================== Encomendas e chegadas (uma linha por unidade) ===================== */
@@ -1714,7 +1759,7 @@ function vImportar(v){
   ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over")}));
   drop.addEventListener("drop",e=>addPdfs(e.dataTransfer.files));
   $("#pdfsIn").onchange=e=>{ addPdfs(e.target.files); e.target.value=""; };
-  $("#dlTudo").onclick=()=>baixar(`pedidos_${today.toISOString().slice(0,10)}.xlsx`,[["fornecedor","numero_pedido","valor_total","condicao_pagamento","prazo_faturamento","data_faturamento","data_pedido","is_encomenda","condicao_faturamento","status","conferido","observacoes"],...S.pedidos.map(p=>[p.fornecedor,p.numero_pedido,p.valor_total,p.condicao_pagamento,fmtD(p.prazo_faturamento),fmtD(p.data_faturamento),fmtD(p.data_pedido),p.is_encomenda?"Sim":"Não",p.condicao_faturamento,ST[p.status]?.l,p.conferido?"Sim":"Não",p.observacoes].map(x=>x==="—"?"":x))]);
+  $("#dlTudo").onclick=()=>baixar(`pedidos_${hojeISO()}.xlsx`,[["fornecedor","numero_pedido","valor_total","condicao_pagamento","prazo_faturamento","data_faturamento","data_pedido","is_encomenda","condicao_faturamento","status","conferido","observacoes"],...S.pedidos.map(p=>[p.fornecedor,p.numero_pedido,p.valor_total,p.condicao_pagamento,fmtD(p.prazo_faturamento),fmtD(p.data_faturamento),fmtD(p.data_pedido),p.is_encomenda?"Sim":"Não",p.condicao_faturamento,ST[p.status]?.l,p.conferido?"Sim":"Não",p.observacoes].map(x=>x==="—"?"":x))]);
   showFila();
 }
 function addPdfs(files){
@@ -1778,7 +1823,7 @@ function showFila(){
     if(falta.length){ toast(`Preencha fornecedor, valor e pagamento em ${falta.length} linha${falta.length>1?"s":""}`); return; }
     const b=$("#impGo"); b.disabled=true; let ok=0; const base=Date.now();
     b.innerHTML=`<span class="spin"></span> Importando…`;
-    const lote=sel.map((i,n)=>{ const p={...i.p}; if(p.status==="faturado"&&!p.data_faturamento) p.data_faturamento=p.prazo_faturamento||today.toISOString().slice(0,10); p.criado_em=base-n;
+    const lote=sel.map((i,n)=>{ const p={...i.p}; if(p.status==="faturado"&&!p.data_faturamento) p.data_faturamento=p.prazo_faturamento||hojeISO(); p.criado_em=base-n;
       if(p.itens.length) p.is_encomenda=p.itens.some(x=>(x.unidades||[]).some(u=>u.tipo==="encomenda")); p.itens=p.itens.map(limparItem); return p; });
     if(await guard(()=>api("importarPedidos",{pedidos:lote}))){ ok=lote.length; fila=fila.filter(x=>!sel.includes(x)); } else { b.disabled=false; showFila(); return; }
     toast(`${ok} pedido${ok===1?"":"s"} importado${ok===1?"":"s"}`);
