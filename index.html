@@ -223,6 +223,22 @@ tr.paid td .desc{text-decoration:line-through}
 .erro-bar svg{width:18px;height:18px;color:var(--red);flex:none}
 .erro-bar span{flex:1 1 240px}
 .wrap>*{min-width:0}
+.cst{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.cst-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cst-f .lab{margin:0}
+.cst-fr{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px}
+.cst-fr .lab{width:100%}
+.cst-fr select.f{width:auto;flex:1 1 200px}
+.vm{display:inline-flex;gap:4px}
+.vm input{width:110px}.vm select{width:70px}
+.cst-chk{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600}
+.cst-dica{grid-column:1/-1}
+.cst-res{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted);padding:8px 2px 0}
+.cst-res b{color:var(--fg);font-family:var(--font-num);font-weight:600}
+.cst-dif{width:100%;color:var(--red);font-weight:600}.cst-ok{width:100%;color:var(--green)}
+.cu{font-family:var(--font-num);font-size:12.5px;white-space:nowrap}
+.vc-medio{color:var(--amber);font-weight:600}
+.items-tbl input.cx{width:78px}
 .two>*,.alert>div{min-width:0}
 .row-mini>*{min-width:0}
 #dBody{width:100%;max-width:none;margin:0}
@@ -271,6 +287,7 @@ tr.paid td .desc{text-decoration:line-through}
   .order .acts{grid-column:2}
   .form-row,.form-row.lm{grid-template-columns:1fr}
   .un-row{grid-template-columns:40px auto;}
+  .cst{grid-template-columns:1fr}
   .un-row .f{grid-column:1/-1}
   .grid2,.dl,.cols{grid-template-columns:1fr}
   .chart-box{height:260px}
@@ -288,7 +305,7 @@ tr.paid td .desc{text-decoration:line-through}
     <button class="nav" data-view="encomendas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Encomendas</button>
     <button class="nav" data-view="produtos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Produtos</button>
     <button class="nav" data-view="importar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></svg>Importar</button>
-    <div class="side-foot"><span class="mini" style="display:block;margin-bottom:6px">Versão 22/10-b · lixeira, backup e trava de edição</span><span class="mini" id="bkp" style="display:block;margin-bottom:6px"></span><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
+    <div class="side-foot"><span class="mini" style="display:block;margin-bottom:6px">Versão 22/10-c · custos, impostos e frete</span><span class="mini" id="bkp" style="display:block;margin-bottom:6px"></span><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
   </nav>
   <main><div class="wrap" id="view"></div></main>
 </div>
@@ -537,7 +554,7 @@ const loading = () => !S.loaded.p;
 
 /* Dashboard */
 /* ===================== Dashboard de decisão ===================== */
-const DTABS = [["geral","Visão geral"],["caixa","Caixa"],["fornecedores","Fornecedores"],["encomendas","Encomendas x venda"],["produtos","Produtos"]];
+const DTABS = [["geral","Visão geral"],["caixa","Caixa"],["custos","Custos e impostos"],["frete","Frete"],["fornecedores","Fornecedores"],["encomendas","Encomendas x venda"],["produtos","Produtos"]];
 const anoDe = p => +((p.data_pedido || baseDate(p) || "").slice(0,4)) || 0;
 const pedidosAno = ano => S.pedidos.filter(p=>ativo(p) && anoDe(p)===ano);
 function compMes(y, m){ const x=fluxo(y)[m]; return x.enc+x.com+x.fat+x.contas; }
@@ -548,7 +565,7 @@ function alertas(){
   const unid=rs=>rs.reduce((a,r)=>a+(r.grupo?r.x.unidades.filter(u=>!u.receb).length:1),0);
   const atr=unid(pend.filter(r=>sitLinha(r)[0]==="atraso"));
   const encSemPrev=pend.filter(r=>!prevEfetiva(r.x) && destinoLinha(r).e).reduce((a,r)=>a+destinoLinha(r).e,0);
-  const precos=itensComPreco().filter(o=>o.dif>0.05);
+  const aum=aumentosPendentes();
   const meses=[]; for(let k=0;k<6;k++){ const d=new Date(agora().getFullYear(), agora().getMonth()+k, 1); const y=d.getFullYear(), m=d.getMonth(); const c=compMes(y,m); if(c>metaDe(y,m)) meses.push(`${MES3[m]}/${String(y).slice(2)}`); }
   const fora=itensFora().length;
   const soma=a=>a.reduce((t,x)=>t+x.valor,0);
@@ -558,7 +575,7 @@ function alertas(){
   if(atr) out.push({sev:"r", txt:`<b>${atr}</b> unidade${atr>1?"s":""} com chegada atrasada`, go:()=>{S.ef.sit="atraso";go("encomendas");}});
   if(encSemPrev) out.push({sev:"a", txt:`<b>${encSemPrev}</b> encomenda${encSemPrev>1?"s":""} sem previsão de chegada`, go:()=>{S.ef.sit="sem";S.ef.dest="encomenda";go("encomendas");}});
   if(meses.length) out.push({sev:"r", txt:`Meta estourada em <b>${meses.join(", ")}</b>`, go:()=>{S.dtab="caixa";render();}});
-  if(precos.length) out.push({sev:"a", txt:`<b>${precos.length}</b> ite${precos.length>1?"ns":"m"} comprado${precos.length>1?"s":""} acima do custo do cadastro (+5%)`, go:()=>{S.dtab="fornecedores";render();}});
+  if(aum.length) out.push({sev:"a", txt:`<b>${aum.length}</b> produto${aum.length>1?"s":""} com aumento de preço a conferir (+5% ou mais)`, go:()=>{S.dtab="custos";S.cfil="pendentes";render();}});
   if(fora) out.push({sev:"i", txt:`<b>${fora}</b> ite${fora>1?"ns":"m"} fora do cadastro de produtos`, go:()=>{S.dtab="produtos";render();}});
   return out;
 }
@@ -587,7 +604,7 @@ function vDash(v){
   ${faixaAlertas()}
   <div class="dtabs" role="tablist">${DTABS.map(([k,n])=>`<button role="tab" class="dtab" data-dtab="${k}" aria-selected="${tab===k}">${n}</button>`).join("")}</div>
   <div id="dBody" class="wrap" style="gap:20px"></div>`;
-  ({geral:dGeral, caixa:dCaixa, fornecedores:dFornecedores, encomendas:dEncomendas, produtos:dProdutos})[tab]($("#dBody"));
+  ({geral:dGeral, caixa:dCaixa, custos:dCustos, frete:dFrete, fornecedores:dFornecedores, encomendas:dEncomendas, produtos:dProdutos})[tab]($("#dBody"));
   $("#dAno").onchange=e=>{S.ano=+e.target.value;render()};
   $("#dMes")&&($("#dMes").onchange=e=>{S.mes=+e.target.value;render()});
   $("#dPrev")&&($("#dPrev").onclick=()=>{ if(--S.mes<0){S.mes=11;S.ano--;} render(); });
@@ -709,10 +726,10 @@ function dEncomendas(v){
   const ano=S.ano, ps=pedidosAno(ano);
   let vE=0, vV=0, nE=0, nV=0, mRec=0, mCus=0, semCad=0;
   const C=new Map();
-  for(const p of ps) for(const x of p.itens||[]){ const vu=+x.valor_unitario||0, pr=prodDe(x);
+  for(const p of ps){ const kc=calcCustos(p); (p.itens||[]).forEach((x,ix)=>{ const vu=+x.valor_unitario||0, pr=prodDe(x), ct=kc.unit[ix]?kc.unit[ix].total:vu;
     for(const u of x.unidades||[]){
-      if(u.tipo==="encomenda"){ vE+=vu; nE++; if(pr&&pr.preco>0){ mRec+=pr.preco; mCus+=vu; } else semCad++; }
-      else { vV+=vu; nV++; } } }
+      if(u.tipo==="encomenda"){ vE+=vu; nE++; if(pr&&pr.preco>0){ mRec+=pr.preco; mCus+=ct; } else semCad++; }
+      else { vV+=vu; nV++; } } }); }
   for(const r of linhasEncomenda()){ if(r.vazio) continue; const us=r.grupo?r.x.unidades:[r.z];
     for(const u of us){ if(u.tipo!=="encomenda") continue; const nome=u.cliente||"(cliente não informado)";
       if(!C.has(nome)) C.set(nome,{nome,un:0,pend:0,atr:0,valor:0,prox:"",peds:new Set()});
@@ -724,7 +741,7 @@ function dEncomendas(v){
   <div class="kpis">
     <div class="card kpi"><div class="kpi-top">Encomendas em ${ano} ${ic.box}</div><div class="big">${brl(vE)}</div><div class="mini">${nE} unidades · ${tot?Math.round(vE/tot*100):0}% do valor dos itens</div></div>
     <div class="card kpi"><div class="kpi-top">Venda (loja) em ${ano} ${ic.cart}</div><div class="big">${brl(vV)}</div><div class="mini">${nV} unidades · ${tot?Math.round(vV/tot*100):0}%</div></div>
-    <div class="card kpi"><div class="kpi-top">Margem prevista das encomendas ${ic.trend}</div><div class="big ${mRec-mCus<0?"neg":"pos"}">${brl(mRec-mCus)}</div><div class="mini">${mRec?Math.round((mRec-mCus)/mRec*100)+"% sobre o preço de venda":"—"}${semCad?` · ${semCad} un. sem preço no cadastro`:""}</div></div>
+    <div class="card kpi"><div class="kpi-top">Margem prevista das encomendas ${ic.trend}</div><div class="big ${mRec-mCus<0?"neg":"pos"}">${brl(mRec-mCus)}</div><div class="mini">${mRec?Math.round((mRec-mCus)/mRec*100)+"% sobre o preço de venda · custo com impostos e frete":"—"}${semCad?` · ${semCad} un. sem preço no cadastro`:""}</div></div>
     <div class="card kpi"><div class="kpi-top">Encomendas atrasadas ${ic.warn}</div><div class="big ${cl.some(o=>o.atr)?"neg":""}">${cl.reduce((a,o)=>a+o.atr,0)}</div><div class="mini">${cl.filter(o=>o.atr).length} cliente${cl.filter(o=>o.atr).length===1?"":"s"} afetado${cl.filter(o=>o.atr).length===1?"":"s"}</div></div>
   </div>
   <div class="card pad"><h2 class="sec-title">Quanto do que compro já está vendido</h2><div class="mini">Valor dos itens dos pedidos de ${ano}, por destino da unidade</div>
@@ -884,9 +901,10 @@ function openModal(html){
   document.addEventListener("keydown",escClose);
   $("#modalRoot").querySelectorAll("[data-close]").forEach(b=>b.onclick=closeModal);
 }
-let itensTmp = [];
+let itensTmp = [], pedTmp = null;
 function modalPedido(p){
   const ed = !!p; p = p || {status:"aprovado",data_pedido:hojeISO()}; const versaoAberta = p.versao||0;
+  pedTmp = { custos: p.custos ? JSON.parse(JSON.stringify(custosDe(p))) : (custosSugeridos(p.fornecedor)||CUSTOS_PADRAO()), get valor_total(){ return parseNum($("#p_val")?.value); } };
   itensTmp = (p.itens||[]).map(x=>{ const y={...x, unidades:(x.unidades||[]).map(u=>({...u}))}; prepItem(y,p); if(!y.cod_produto && y.vinculo!=="novo_ok"){ y.vinculo=""; vincularItem(y,p.fornecedor||""); } return y; });
   openModal(`<div class="mhead"><h3>${ed?"Editar Pedido":"Novo Pedido"}</h3><button class="icon-btn" data-close aria-label="Fechar">${ic.x}</button></div>
   <form id="fp" class="grid2" novalidate>
@@ -902,7 +920,7 @@ function modalPedido(p){
     <label class="field"><span class="lab">Data real do faturamento</span><input class="f" type="date" id="p_dfat" value="${p.data_faturamento||""}"></label>
     <label class="field"><span class="lab">Condição de faturamento</span><input class="f" id="p_cfat" placeholder="Ex: Faturado, A faturar" value="${esc(p.condicao_faturamento||"")}"></label>
     <div class="field" style="justify-content:flex-end;padding-bottom:8px"><span class="mini">Encomenda ou venda é marcado em cada unidade, na lista de itens abaixo.</span></div>
-    <div class="field full"><span class="lab">Itens, unidades e prazo de entrega <span style="text-transform:none;letter-spacing:0;font-weight:400">(cada unidade: encomenda ou venda)</span></span><div id="itensBox"></div></div>
+    <div class="field full"><span class="lab">Custos, itens, unidades e prazo de entrega <span style="text-transform:none;letter-spacing:0;font-weight:400">(IPI, ST e frete em % ou R$; cada unidade: encomenda ou venda)</span></span><div id="itensBox"></div></div>
     <label class="field full"><span class="lab">Observações</span><textarea class="f" id="p_obs" placeholder="Notas adicionais…">${esc(p.observacoes||"")}</textarea></label>
     <div class="full note" id="parcPrev"></div>
     <div class="full note err" id="pErr" hidden></div>
@@ -915,11 +933,13 @@ function modalPedido(p){
     const ps=parcelas(tmp); $("#parcPrev").innerHTML = ps.length&&tmp.valor_total ? "Parcelas: "+ps.map(x=>`<span class="num">${fmtD(x.venc)} ${brl(x.valor)}</span>`).join(" · ") : ""; };
   ["p_val","p_cond","p_dfat","p_prev","p_dped"].forEach(i=>$("#"+i).addEventListener("input",prev)); prev();
   $("#p_dped").addEventListener("change",renderItens);
+  $("#p_val").addEventListener("change",renderItens);
+  $("#p_forn").addEventListener("change",()=>{ const c=custosDe(pedTmp); if(!c.ipi.v&&!c.st.v&&!c.frete.v){ const sg=custosSugeridos($("#p_forn").value); if(sg){ pedTmp.custos=sg; renderItens(); toast("Custos preenchidos com as condições do último pedido deste fornecedor"); } } });
   $("#pdfIn").onchange=e=>{ const f=e.target.files[0]; if(f) lerPdf(f,prev); };
   $("#pSave").onclick=async()=>{
     const d={fornecedor:$("#p_forn").value.trim(),numero_pedido:$("#p_num").value.trim(),valor_total:parseNum($("#p_val").value),condicao_pagamento:$("#p_cond").value.trim(),
       data_pedido:$("#p_dped").value,prazo_faturamento:$("#p_prev").value,data_faturamento:$("#p_dfat").value,status:$("#p_st").value,condicao_faturamento:$("#p_cfat").value.trim(),
-      is_encomenda: itensTmp.length ? itensTmp.some(x=>(x.unidades||[]).some(u=>u.tipo==="encomenda")) : !!p.is_encomenda, observacoes:$("#p_obs").value.trim(),itens:itensTmp.filter(x=>x.descricao).map(limparItem),conferido:!!p.conferido,parcelas_pagas:pagas(p),criado_em:p.criado_em||Date.now(), _versao: versaoAberta};
+      is_encomenda: itensTmp.length ? itensTmp.some(x=>(x.unidades||[]).some(u=>u.tipo==="encomenda")) : !!p.is_encomenda, observacoes:$("#p_obs").value.trim(),itens:itensTmp.filter(x=>x.descricao).map(limparItem),conferido:!!p.conferido,parcelas_pagas:pagas(p),custos:custosDe(pedTmp),criado_em:p.criado_em||Date.now(), _versao: versaoAberta};
     const err=[]; if(!d.fornecedor) err.push("fornecedor"); if(!d.valor_total) err.push("valor total"); if(!d.condicao_pagamento) err.push("condição de pagamento");
     if(err.length){ const e=$("#pErr"); e.hidden=false; e.textContent="Preencha: "+err.join(", ")+"."; return; }
     $("#pSave").disabled=true;
@@ -999,6 +1019,7 @@ function chavesVinculo(x, forn){
 function aplicarVinculo(x, p, modo){
   if(!x.desc_fornecedor) x.desc_fornecedor = x.descricao;
   x.descricao = p.desc; x.cod_produto = p.id; x.vinculo = modo; delete x.sug;
+  if(!x.custo_ref && p.custo){ x.custo_ref = p.custo; x.custo_ref_em = hojeISO(); }
   return x;
 }
 /* Encontra o produto do cadastro para um item do PDF: vínculo aprendido > referência da fábrica > descrição */
@@ -1140,26 +1161,35 @@ function unidadesHtml(x, i, pre){
     ${z.tipo==="encomenda"?`<input class="f" id="${pre}_cl${i}_${k}" data-ucli="${i}|${k}" value="${esc(z.cliente||"")}" placeholder="Cliente da encomenda" list="${pre}_cli">`:`<span></span>`}
     ${z.receb?`<span class="sit ok">Recebida ${fmtD(z.receb).slice(0,5)}</span>`:""}</div>`).join("");
 }
-function itemEditor(itens, base, pre){
+function itemEditor(itens, base, pre, ped){
+  ped = ped || {custos:CUSTOS_PADRAO()};
+  const k = calcCustos(ped, itens), c = custosDe(ped);
+  const padrao = o => o.m==="%" ? fmtVal(o) : "rateio";
   return `<div class="it-box">
+    ${custosHtml(ped, pre)}
     <div class="it-all">Prazo de entrega para todos os itens: <input class="f num" id="${pre}_todos" inputmode="numeric" placeholder="dias" style="height:30px"> dias <button type="button" class="btn sm" data-ie="todos">Aplicar</button> <span>ou informe item a item. Contado a partir de ${fmtD(base)}.</span></div>
     <datalist id="${pre}_cli">${clientesConhecidos().map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
-    <div class="tbl-wrap items-tbl"><table><thead><tr><th style="width:110px">Código</th><th>Descrição (cadastro)</th><th class="r" style="width:70px">Qtd</th><th class="r" style="width:110px">Valor unit.</th><th class="r" style="width:80px">Prazo (dias)</th><th style="width:150px">Chegada prevista</th><th style="width:36px"></th></tr></thead><tbody>
+    <div class="tbl-wrap items-tbl"><table><thead><tr><th style="width:110px">Código</th><th>Descrição (cadastro)</th><th class="r" style="width:70px">Qtd</th><th class="r" style="width:110px">Valor unit.</th><th class="r" style="width:86px">IPI</th><th class="r" style="width:86px">ST</th><th class="r" style="width:120px">Custo unit.</th><th class="r" style="width:80px">Prazo (dias)</th><th style="width:150px">Chegada prevista</th><th style="width:36px"></th></tr></thead><tbody>
     ${itens.map((x,i)=>`<tr class="it-main">
       <td><input class="f num" id="${pre}_c${i}" data-i="${i}" data-k="codigo" value="${esc(x.codigo||"")}" placeholder="Cód."></td>
       <td><input class="f" id="${pre}_d${i}" data-i="${i}" data-k="descricao" value="${esc(x.descricao)}" placeholder="Produto">${vincHtml(x,i)}</td>
       <td><input class="f num" id="${pre}_q${i}" data-i="${i}" data-k="quantidade" inputmode="numeric" value="${x.quantidade??""}" style="text-align:right"></td>
       <td><input class="f num" id="${pre}_u${i}" data-i="${i}" data-k="valor_unitario" inputmode="decimal" value="${x.valor_unitario!=null?String(x.valor_unitario).replace(".",","):""}" style="text-align:right"></td>
+      <td><input class="f num cx" id="${pre}_ipi${i}" data-i="${i}" data-k="ipi" value="${esc(fmtVal(x.ipi))}" placeholder="${esc(padrao(c.ipi))}" title="% sobre o preço ou R$ por unidade (ex: 3,25% ou R$ 12,00). Vazio = IPI do pedido" style="text-align:right"></td>
+      <td><input class="f num cx" id="${pre}_st${i}" data-i="${i}" data-k="st" value="${esc(fmtVal(x.st))}" placeholder="${esc(padrao(c.st))}" title="% sobre o preço ou R$ por unidade. Vazio = ST do pedido" style="text-align:right"></td>
+      <td class="r cu">${k.unit[i]?`${brl(k.unit[i].custo)}${k.unit[i].frete?`<div class="mini">+ frete ${brl(k.unit[i].frete)}</div>`:""}`:""}</td>
       <td><input class="f num" id="${pre}_p${i}" data-i="${i}" data-k="prazo_dias" inputmode="numeric" value="${x.previsao_chegada&&base?diasEntre(base,x.previsao_chegada):""}" style="text-align:right"></td>
       <td><input class="f" type="date" id="${pre}_a${i}" data-i="${i}" data-k="previsao_chegada" value="${x.previsao_chegada||""}"></td>
       <td><button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover item">${ic.x}</button></td></tr>
-      <tr class="it-un"><td></td><td colspan="6">${unidadesHtml(x,i,pre)}</td></tr>`).join("")}
+      <tr class="it-un"><td></td><td colspan="9">${unidadesHtml(x,i,pre)}</td></tr>`).join("")}
     </tbody></table></div>
+    ${resumoCustosHtml(ped, itens)}
     <div><button type="button" class="btn sm" data-ie="add">${ic.plus} Adicionar item</button> <span class="mini">${itens.length?`${itens.length} ite${itens.length===1?"m":"ns"} · ${itens.reduce((a,x)=>a+(+x.quantidade||0),0)} unidades · ${brl(itens.reduce((a,x)=>a+(+x.quantidade||0)*(+x.valor_unitario||0),0))}`:""}</span></div>
   </div>`;
 }
-function bindItemEditor(box, itens, getBase, redraw, getForn){
+function bindItemEditor(box, itens, getBase, redraw, getForn, ped){
   const later=()=>setTimeout(()=>{ const id=document.activeElement?.id; redraw(); if(id) document.getElementById(id)?.focus(); },0);
+  if(ped) bindCustos(box, ped, redraw);
   const forn = () => (getForn && getForn()) || "";
   box.querySelectorAll("input[data-k]").forEach(inp=>inp.addEventListener("change",e=>{
     const i=+e.target.dataset.i,k=e.target.dataset.k,v=e.target.value,it=itens[i], base=getBase();
@@ -1168,6 +1198,7 @@ function bindItemEditor(box, itens, getBase, redraw, getForn){
     else if(k==="previsao_chegada") it.previsao_chegada=v;
     else if(k==="prazo_dias"){ const d=parseInt(v,10); it.previsao_chegada = (!isNaN(d)&&base) ? addDays(base,d) : ""; }
     else if(k==="quantidade"){ it.quantidade=Math.max(0,Math.round(parseNum(v))); prepItem(it); }
+    else if(k==="ipi"||k==="st"){ const o=lerValor(v); if(o) it[k]=o; else delete it[k]; }
     else it[k]=parseNum(v);
     later();
   }));
@@ -1189,10 +1220,207 @@ const basePrazo = p => p.data_pedido || hojeISO();
 function renderItens(){
   const box=$("#itensBox"); if(!box) return;
   const base=()=> $("#p_dped")?.value || hojeISO();
-  box.innerHTML=itemEditor(itensTmp, base(), "m");
-  bindItemEditor(box, itensTmp, base, renderItens, ()=>$("#p_forn")?.value||"");
+  box.innerHTML=itemEditor(itensTmp, base(), "m", pedTmp);
+  bindItemEditor(box, itensTmp, base, renderItens, ()=>$("#p_forn")?.value||"", pedTmp);
 }
 const limparItem = x => { const y={...x}; delete y.sug; delete y.recebido_qtd; return y; };
+
+/* ===================== Custos de entrada: IPI, ST e frete (% ou R$) ===================== */
+const CUSTOS_PADRAO = () => ({ipi:{m:"%",v:0}, st:{m:"%",v:0}, frete:{m:"%",v:0,base:"produtos",tipo:"nota"}, imp_custo:true});
+function custosDe(p){
+  const c=(p&&p.custos)||{}, d=CUSTOS_PADRAO();
+  return {ipi:{...d.ipi,...(c.ipi||{})}, st:{...d.st,...(c.st||{})}, frete:{...d.frete,...(c.frete||{})}, imp_custo:c.imp_custo!==false};
+}
+/* "3,25%" -> % ; "R$ 12,50" -> R$ ; "5" -> % ; vazio -> null */
+function lerValor(s){ const t=String(s??"").trim(); if(!t) return null; return {m:/R\$|\$/i.test(t)?"R$":"%", v:parseNum(t.replace(/%/g,""))}; }
+const fmtNum = n => (Math.round((+n||0)*100)/100).toLocaleString("pt-BR",{maximumFractionDigits:2});
+const fmtVal = o => !o ? "" : o.m==="R$" ? "R$ "+fmtNum(o.v) : fmtNum(o.v)+"%";
+/* Custo de entrada por unidade de cada item e totais do pedido.
+   IPI/ST do item (se informado) vale para aquele item: % sobre o preço, ou R$ por unidade.
+   IPI/ST do pedido em R$ é rateado entre os itens sem valor próprio, proporcional ao valor.
+   Frete em % incide sobre os produtos ou sobre o total do pedido (com IPI/ST); em R$ é rateado. */
+function calcCustos(p, itensOpc){
+  const itens = itensOpc || p.itens || [], c = custosDe(p);
+  const L = itens.map(x=>({x, q:Math.max(0,+x.quantidade||0), vu:+x.valor_unitario||0}));
+  const prod = L.reduce((a,l)=>a+l.q*l.vu,0);
+  const imposto = chave => {
+    const pad=c[chave], semProprio=L.filter(l=>!l.x[chave]).reduce((a,l)=>a+l.q*l.vu,0);
+    return L.map(l=>{ const o=l.x[chave];
+      if(o) return o.m==="%" ? l.vu*o.v/100 : o.v;
+      if(pad.m==="%") return l.vu*pad.v/100;
+      return semProprio ? pad.v*l.vu/semProprio : 0; });
+  };
+  const ipiU=imposto("ipi"), stU=imposto("st");
+  const ipi=L.reduce((a,l,i)=>a+l.q*ipiU[i],0), st=L.reduce((a,l,i)=>a+l.q*stU[i],0);
+  const f=c.frete, baseU=L.map((l,i)=> f.base==="total" ? l.vu+ipiU[i]+stU[i] : l.vu);
+  const baseT=L.reduce((a,l,i)=>a+l.q*baseU[i],0);
+  let frete;
+  if(baseT>0) frete = f.m==="%" ? baseT*f.v/100 : f.v;
+  else frete = f.m==="%" ? (+p.valor_total||0)*f.v/100 : f.v;
+  const freteU = L.map((l,i)=> baseT ? frete*baseU[i]/baseT : 0);
+  const inc = c.imp_custo;
+  const unit = L.map((l,i)=>({preco:l.vu, ipi:ipiU[i], st:stU[i], frete:freteU[i], custo:l.vu+(inc?ipiU[i]+stU[i]:0), total:l.vu+(inc?ipiU[i]+stU[i]:0)+freteU[i]}));
+  const nota = prod + ipi + st + (f.tipo==="nota" ? frete : 0);
+  return {c, prod, ipi, st, frete, custoSemFrete:prod+(inc?ipi+st:0), custoTotal:prod+(inc?ipi+st:0)+frete, nota, unit, temItens:prod>0};
+}
+/* Condições do último pedido do mesmo fornecedor (só percentuais, que valem de um pedido para outro) */
+function custosSugeridos(forn){
+  const k=chaveForn(forn); if(!k) return null;
+  const ant=[...S.pedidos].filter(p=>p.custos && chaveForn(p.fornecedor)===k).sort((a,b)=>(b.criado_em||0)-(a.criado_em||0))[0];
+  if(!ant) return null; const c=custosDe(ant), n=CUSTOS_PADRAO();
+  if(c.ipi.m==="%") n.ipi=c.ipi; if(c.st.m==="%") n.st=c.st;
+  n.frete={...c.frete}; if(c.frete.m==="R$") n.frete.v=0;
+  n.imp_custo=c.imp_custo; return n;
+}
+function custosHtml(ped, pre){
+  const c=custosDe(ped);
+  const vm=(k,o)=>`<span class="vm"><input class="f num" id="${pre}_${k}" data-cs="${k}" inputmode="decimal" value="${o.v?fmtNum(o.v):""}" placeholder="0"><select class="f" id="${pre}_${k}m" data-csm="${k}"><option ${o.m==="%"?"selected":""}>%</option><option ${o.m==="R$"?"selected":""}>R$</option></select></span>`;
+  return `<div class="cst">
+    <label class="cst-f"><span class="lab">IPI do pedido</span>${vm("ipi",c.ipi)}</label>
+    <label class="cst-f"><span class="lab">ST do pedido</span>${vm("st",c.st)}</label>
+    <label class="cst-f cst-fr"><span class="lab">Frete estimado</span>${vm("frete",c.frete)}
+      <select class="f" id="${pre}_fb" data-csb="1"><option value="produtos" ${c.frete.base!=="total"?"selected":""}>sobre os produtos</option><option value="total" ${c.frete.base==="total"?"selected":""}>sobre o total do pedido (com IPI/ST)</option></select>
+      <select class="f" id="${pre}_ft" data-cst="1"><option value="nota" ${c.frete.tipo!=="transportadora"?"selected":""}>cobrado na nota (entra no boleto)</option><option value="transportadora" ${c.frete.tipo==="transportadora"?"selected":""}>pago à transportadora (FOB)</option></select></label>
+    <label class="cst-chk"><input type="checkbox" id="${pre}_imp" data-csi="1" ${c.imp_custo?"checked":""}> IPI e ST entram no custo</label>
+    <span class="mini cst-dica">Em R$, IPI/ST/frete do pedido são o valor total, dividido entre os itens pelo valor. Na coluna do item, % é sobre o preço e R$ é por unidade.</span>
+  </div>`;
+}
+function resumoCustosHtml(ped, itens){
+  const k=calcCustos(ped, itens); if(!k.temItens) return "";
+  const vt=+ped.valor_total||0, dif=vt?k.nota-vt:0, tol=Math.max(1, vt*0.005);
+  return `<div class="cst-res">
+    <span>Produtos <b>${brl(k.prod)}</b></span><span>+ IPI <b>${brl(k.ipi)}</b></span><span>+ ST <b>${brl(k.st)}</b></span>
+    <span>= Custo sem frete <b>${brl(k.custoSemFrete)}</b>${k.c.imp_custo?"":` <span class="mini">(impostos fora do custo)</span>`}</span>
+    <span>+ Frete <b>${brl(k.frete)}</b> <span class="mini">${k.c.frete.tipo==="transportadora"?"transportadora":"na nota"}</span></span>
+    <span>= Custo total <b>${brl(k.custoTotal)}</b></span>
+    ${vt?`<span class="${Math.abs(dif)>tol?"cst-dif":"cst-ok"}">Nota esperada ${brl(k.nota)} · total do pedido ${brl(vt)}${Math.abs(dif)>tol?` · diferença ${dif>0?"+":""}${brl(dif)}: confira IPI, ST, frete ou algum item`:" · confere"}</span>`:""}
+  </div>`;
+}
+function bindCustos(box, ped, redraw){
+  ped.custos = custosDe(ped);
+  const later=()=>setTimeout(()=>{ const id=document.activeElement?.id; redraw(); if(id) document.getElementById(id)?.focus(); },0);
+  box.querySelectorAll("[data-cs]").forEach(i=>i.addEventListener("change",e=>{ ped.custos[i.dataset.cs].v=parseNum(e.target.value); later(); }));
+  box.querySelectorAll("[data-csm]").forEach(i=>i.addEventListener("change",e=>{ ped.custos[i.dataset.csm].m=e.target.value; later(); }));
+  box.querySelectorAll("[data-csb]").forEach(i=>i.addEventListener("change",e=>{ ped.custos.frete.base=e.target.value; later(); }));
+  box.querySelectorAll("[data-cst]").forEach(i=>i.addEventListener("change",e=>{ ped.custos.frete.tipo=e.target.value; later(); }));
+  box.querySelectorAll("[data-csi]").forEach(i=>i.addEventListener("change",e=>{ ped.custos.imp_custo=e.target.checked; later(); }));
+}
+/* Leitura de IPI, ST e frete no texto do PDF */
+function custosDoTexto(linhas){
+  const c=CUSTOS_PADRAO(); let achou=false;
+  const valorApos=(l,rx)=>{ const m=l.match(rx); if(!m) return null; const resto=l.slice(m.index+m[0].length);
+    const n=resto.match(/^\s*:?\s*(?:CIF|FOB)?\s*(R\$)?\s*(\d{1,3}(?:\.\d{3})*(?:,\d{1,4})?|\d+(?:,\d+)?)\s*(%)?/i); if(!n) return null;
+    return {m:n[3]?"%":"R$", v:parseNum(n[2])}; };
+  for(const l of linhas){
+    if(/%\s*IPI|%\s*ST/i.test(l) && !/\d,\d/.test(l)) continue; /* cabeçalho de colunas */
+    let o;
+    if(!achou||!c.ipi.v){ o=valorApos(l,/(?:\(\+\)\s*)?\b(?:valor\s+(?:total\s+)?(?:do\s+)?)?IPI\b/i); if(o&&o.v>0){ c.ipi=o; achou=true; } }
+    if(!c.st.v){ o=valorApos(l,/(?:\(\+\)\s*)?\b(?:ICMS[\s-]*ST|ST|subst\w*\s+tribut\w*)\b(?=\s*:)/i); if(o&&o.v>0){ c.st=o; achou=true; } }
+    const cf=l.match(/custo\s+(?:de\s+)?frete\s*:?\s*(\d+(?:,\d+)?)\s*%/i); if(cf){ c.frete.m="%"; c.frete.v=parseNum(cf[1]); achou=true; }
+    else if(!c.frete.v){ o=valorApos(l,/(?:\(\+\)\s*)?\bfrete\b/i); if(o&&o.v>0){ c.frete.m=o.m; c.frete.v=o.v; achou=true; } }
+    if(/\bfrete\b[^.\n]{0,25}\bFOB\b|\bFOB\b/i.test(l)){ c.frete.tipo="transportadora"; achou=true; }
+  }
+  return achou ? c : null;
+}
+
+/* ===================== Painel: Custos e impostos (sem frete) ===================== */
+function historicoPrecos(){
+  const H=new Map();
+  for(const p of S.pedidos){ if(!ativo(p)) continue; const k=calcCustos(p); const data=p.data_pedido||baseDate(p)||"";
+    (p.itens||[]).forEach((x,i)=>{ if(!x.descricao||!(+x.valor_unitario>0)) return; const pr=prodDe(x);
+      const chave=pr?"p:"+pr.id:"d:"+normTxt(x.descricao);
+      if(!H.has(chave)) H.set(chave,{chave,nome:pr?pr.desc:x.descricao,cod:pr?pr.id:"",pr,compras:[]});
+      H.get(chave).compras.push({data,p,i,x,preco:+x.valor_unitario,custo:k.unit[i]?k.unit[i].custo:+x.valor_unitario,total:k.unit[i]?k.unit[i].total:+x.valor_unitario,forn:p.fornecedor,q:(x.unidades||[]).length||+x.quantidade||0}); }); }
+  const out=[];
+  for(const h of H.values()){
+    h.compras.sort((a,b)=>a.data.localeCompare(b.data)||(a.p.criado_em||0)-(b.p.criado_em||0));
+    const u=h.compras[h.compras.length-1]; const ant=[...h.compras].reverse().find(c=>c.p.id!==u.p.id);
+    const desde=addDays(hojeISO(),-365), ano1=h.compras.find(c=>c.data>=desde&&c.p.id!==u.p.id);
+    h.ult=u; h.ant=ant||null;
+    h.varPreco = ant ? u.preco/ant.preco-1 : null;
+    h.varCusto = ant ? u.custo/ant.custo-1 : null;
+    h.var12 = ano1 ? u.preco/ano1.preco-1 : null;
+    h.vsCad = h.pr && h.pr.custo>0 ? u.custo/h.pr.custo-1 : null;
+    h.conferido = !!u.x.aumento_ok;
+    out.push(h);
+  }
+  return out;
+}
+const corVar = v => v===null ? "vc-ok" : v>=0.10 ? "vc-alto" : v>=0.05 ? "vc-medio" : v<=-0.05 ? "vc-baixo" : "vc-ok";
+const fmtVar = v => v===null ? "—" : pct(v);
+function aumentosPendentes(){ return historicoPrecos().filter(h=>h.varPreco!==null && h.varPreco>=0.05 && !h.conferido); }
+function dCustos(v){
+  const ano=S.ano, ps=pedidosAno(ano);
+  let prod=0, ipi=0, st=0, semF=0;
+  const F=new Map();
+  for(const p of ps){ const k=calcCustos(p); prod+=k.prod; ipi+=k.ipi; st+=k.st; semF+=k.custoSemFrete;
+    if(!F.has(p.fornecedor)) F.set(p.fornecedor,{nome:p.fornecedor,prod:0,ipi:0,st:0,pond:0,peso:0}); const o=F.get(p.fornecedor); o.prod+=k.prod; o.ipi+=k.ipi; o.st+=k.st; }
+  const hist=historicoPrecos();
+  for(const h of hist) if(h.varPreco!==null && anoDe(h.ult.p)===ano){ const o=F.get(h.ult.forn); if(o){ const w=h.ult.preco*h.ult.q; o.pond+=h.varPreco*w; o.peso+=w; } }
+  const filtro=S.cfil||"aumentos";
+  let l=hist.filter(h=>h.ant);
+  if(filtro==="aumentos") l=l.filter(h=>h.varPreco>=0.05);
+  if(filtro==="pendentes") l=l.filter(h=>h.varPreco>=0.05&&!h.conferido);
+  if(filtro==="cadastro") l=hist.filter(h=>h.vsCad!==null&&Math.abs(h.vsCad)>=0.05);
+  l.sort((a,b)=> filtro==="cadastro" ? Math.abs(b.vsCad)-Math.abs(a.vsCad) : (b.varPreco??-9)-(a.varPreco??-9));
+  const pend=aumentosPendentes();
+  const fl=[...F.values()].filter(o=>o.prod>0).sort((a,b)=>b.prod-a.prod);
+  v.innerHTML=`
+  <div class="kpis">
+    <div class="card kpi"><div class="kpi-top">Produtos em ${ano} ${ic.box}</div><div class="big">${brl(prod)}</div><div class="mini">preço líquido dos itens</div></div>
+    <div class="card kpi"><div class="kpi-top">IPI + ST ${ic.hash}</div><div class="big">${brl(ipi+st)}</div><div class="mini">IPI ${brl(ipi)} · ST ${brl(st)} · ${prod?((ipi+st)/prod*100).toFixed(1).replace(".",","):0}% sobre os produtos</div></div>
+    <div class="card kpi"><div class="kpi-top">Custo sem frete ${ic.wallet}</div><div class="big">${brl(semF)}</div><div class="mini">produtos + impostos que entram no custo</div></div>
+    <div class="card kpi"><div class="kpi-top">Aumentos a conferir ${ic.warn}</div><div class="big ${pend.length?"neg":""}">${pend.length}</div><div class="mini">produtos com preço +5% ou mais desde a última compra</div></div>
+  </div>
+  <div class="card"><div class="pad" style="padding-bottom:0"><div class="chart-head"><div><h2 class="sec-title">Variação de preço por produto</h2><div class="mini">Última compra contra a compra anterior do mesmo produto. Preço = preço líquido do pedido; custo = preço + IPI + ST (sem frete). Amarelo a partir de +5%, vermelho a partir de +10%.</div></div>
+    <select class="f" id="cfil" style="width:auto"><option value="aumentos" ${filtro==="aumentos"?"selected":""}>Aumentos de 5% ou mais</option><option value="pendentes" ${filtro==="pendentes"?"selected":""}>Aumentos ainda não conferidos</option><option value="todos" ${filtro==="todos"?"selected":""}>Todos com compra anterior</option><option value="cadastro" ${filtro==="cadastro"?"selected":""}>Diferença com o custo do Microvix</option></select></div></div>
+  ${l.length?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Produto</th><th>Fornecedor</th><th class="r">Compra anterior</th><th class="r">Última compra</th><th class="r">Preço</th><th class="r">Custo s/ frete</th><th class="r">12 meses</th><th class="r">x Microvix</th><th></th></tr></thead><tbody>
+  ${l.slice(0,200).map(h=>`<tr class="${h.conferido?"paid":""}"><td style="font-weight:600"><span class="desc">${esc(h.nome)}</span>${h.cod?` <span class="cod">#${esc(h.cod)}</span>`:""}</td><td class="mini">${esc(h.ult.forn)}</td>
+    <td class="r num">${h.ant?`${brl(h.ant.preco)}<div class="mini">${fmtD(h.ant.data)}</div>`:"—"}</td><td class="r num">${brl(h.ult.preco)}<div class="mini">${fmtD(h.ult.data)}</div></td>
+    <td class="r num"><span class="${corVar(h.varPreco)}">${fmtVar(h.varPreco)}</span></td><td class="r num"><span class="${corVar(h.varCusto)}">${fmtVar(h.varCusto)}</span><div class="mini">${brl(h.ult.custo)}</div></td>
+    <td class="r num"><span class="${corVar(h.var12)}">${fmtVar(h.var12)}</span></td>
+    <td class="r num">${h.vsCad===null?"—":`<span class="${corVar(h.vsCad)}" title="Custo s/ frete da última compra contra o custo cadastrado (${brl(h.pr.custo)})">${pct(h.vsCad)}</span>`}</td>
+    <td>${h.varPreco!==null&&h.varPreco>=0.05?(h.conferido?`<button class="lnk" data-cnc="${h.ult.p.id}|${h.ult.i}">Desfazer</button>`:`<button class="btn sm" data-cok="${h.ult.p.id}|${h.ult.i}">Conferido</button>`):""}</td></tr>`).join("")}
+  </tbody></table></div>`:`<div class="empty" style="padding:22px">${hist.some(h=>h.ant)?"Nenhum produto neste filtro.":"Ainda não há produto comprado mais de uma vez para comparar. O histórico se forma a cada pedido importado."}</div>`}</div>
+  <div class="card"><div class="pad" style="padding-bottom:0"><h2 class="sec-title">Impostos e aumento médio por fornecedor em ${ano}</h2><div class="mini">Aumento médio = variação de preço dos produtos comprados de novo, ponderada pelo valor da última compra</div></div>
+  ${fl.length?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Fornecedor</th><th class="r">Produtos</th><th class="r">IPI</th><th class="r">ST</th><th class="r">Impostos %</th><th class="r">Aumento médio</th></tr></thead><tbody>
+  ${fl.map(o=>`<tr><td style="font-weight:600">${esc(o.nome)}</td><td class="r num">${brl(o.prod)}</td><td class="r num">${brl(o.ipi)}</td><td class="r num">${brl(o.st)}</td><td class="r num">${((o.ipi+o.st)/o.prod*100).toFixed(1).replace(".",",")}%</td><td class="r num">${o.peso?`<span class="${corVar(o.pond/o.peso)}">${pct(o.pond/o.peso)}</span>`:"—"}</td></tr>`).join("")}
+  </tbody></table></div>`:`<div class="empty" style="padding:22px">Nenhum pedido com itens em ${ano}.</div>`}</div>`;
+  $("#cfil").onchange=e=>{ S.cfil=e.target.value; render(); };
+  const marca=(key,val)=>{ const [id,i]=key.split("|"); const p=S.pedidos.find(x=>x.id===id); if(!p) return; const its=copiaItens(p); its[+i].aumento_ok=val; salvarItensPedido(p,its,val?"Aumento conferido":"Conferência desfeita"); };
+  v.querySelectorAll("[data-cok]").forEach(b=>b.onclick=()=>marca(b.dataset.cok,true));
+  v.querySelectorAll("[data-cnc]").forEach(b=>b.onclick=()=>marca(b.dataset.cnc,false));
+}
+
+/* ===================== Painel: Frete ===================== */
+function dFrete(v){
+  const ano=S.ano, ps=pedidosAno(ano).map(p=>({p,k:calcCustos(p)}));
+  const comF=ps.filter(o=>o.k.frete>0||o.k.c.frete.tipo==="transportadora"||+o.p.frete_real>0);
+  const prodT=ps.reduce((a,o)=>a+o.k.prod,0), fT=ps.reduce((a,o)=>a+o.k.frete,0);
+  const reais=comF.filter(o=>+o.p.frete_real>0), estR=reais.reduce((a,o)=>a+o.k.frete,0), realR=reais.reduce((a,o)=>a+(+o.p.frete_real),0);
+  const F=new Map(); for(const o of ps){ const n=o.p.fornecedor; if(!F.has(n)) F.set(n,{nome:n,peds:0,prod:0,frete:0,transp:0,nota:0,est:0,real:0}); const f=F.get(n);
+    f.peds++; f.prod+=o.k.prod||(+o.p.valor_total||0); f.frete+=o.k.frete; if(o.k.c.frete.tipo==="transportadora") f.transp++; else if(o.k.frete>0) f.nota++; if(+o.p.frete_real>0){ f.est+=o.k.frete; f.real+=+o.p.frete_real; } }
+  const fl=[...F.values()].filter(f=>f.frete>0||f.real>0).sort((a,b)=>b.frete-a.frete);
+  v.innerHTML=`
+  <div class="kpis">
+    <div class="card kpi"><div class="kpi-top">Frete estimado em ${ano} ${ic.trend}</div><div class="big">${brl(fT)}</div><div class="mini">${comF.length} pedidos com frete</div></div>
+    <div class="card kpi"><div class="kpi-top">Frete sobre os produtos ${ic.hash}</div><div class="big">${prodT?(fT/prodT*100).toFixed(2).replace(".",","):"0"}%</div><div class="mini">média ponderada do ano</div></div>
+    <div class="card kpi"><div class="kpi-top">Pago à transportadora ${ic.cart}</div><div class="big">${brl(ps.filter(o=>o.k.c.frete.tipo==="transportadora").reduce((a,o)=>a+o.k.frete,0))}</div><div class="mini">${ps.filter(o=>o.k.c.frete.tipo==="transportadora").length} pedidos FOB · fora dos boletos do fornecedor</div></div>
+    <div class="card kpi"><div class="kpi-top">Estimado x real ${ic.check}</div><div class="big ${realR>estR*1.05?"neg":""}">${reais.length?pct(realR/estR-1):"—"}</div><div class="mini">${reais.length?`${reais.length} pedidos com frete real · ${brl(realR)} contra ${brl(estR)} estimados`:"informe o frete real na tabela abaixo"}</div></div>
+  </div>
+  <div class="card"><div class="pad" style="padding-bottom:0"><h2 class="sec-title">Frete por fornecedor em ${ano}</h2></div>
+  ${fl.length?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Fornecedor</th><th class="r">Pedidos</th><th class="r">Produtos</th><th class="r">Frete estimado</th><th class="r">% frete</th><th>Tipo</th><th class="r">Real x estimado</th></tr></thead><tbody>
+  ${fl.map(f=>`<tr><td style="font-weight:600">${esc(f.nome)}</td><td class="r num">${f.peds}</td><td class="r num">${brl(f.prod)}</td><td class="r num">${brl(f.frete)}</td><td class="r num">${f.prod?(f.frete/f.prod*100).toFixed(2).replace(".",","):0}%</td><td class="mini">${f.transp?`${f.transp} transportadora`:""}${f.transp&&f.nota?" · ":""}${f.nota?`${f.nota} na nota`:""}</td><td class="r num">${f.est&&f.real?`<span class="${corVar(f.real/f.est-1)}">${pct(f.real/f.est-1)}</span>`:"—"}</td></tr>`).join("")}
+  </tbody></table></div>`:`<div class="empty" style="padding:22px">Nenhum frete informado nos pedidos de ${ano}. Preencha o frete estimado no bloco de custos do pedido.</div>`}</div>
+  <div class="card"><div class="pad" style="padding-bottom:0"><h2 class="sec-title">Frete por pedido</h2><div class="mini">Quando chegar a cobrança da transportadora (ou a nota com o frete), informe o valor real para comparar com a estimativa</div></div>
+  ${comF.length?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Pedido</th><th>Data</th><th>Como foi estimado</th><th class="r">Estimado</th><th style="width:150px">Real (R$)</th><th class="r">Diferença</th></tr></thead><tbody>
+  ${comF.sort((a,b)=>(b.p.data_pedido||"").localeCompare(a.p.data_pedido||"")).map(o=>{const f=o.k.c.frete, r=+o.p.frete_real||0;return `<tr><td style="font-weight:600">${esc(o.p.fornecedor)}<div class="mini">${o.p.numero_pedido?"#"+esc(o.p.numero_pedido):""}</div></td><td class="num">${fmtD(o.p.data_pedido)}</td>
+    <td class="mini">${fmtVal(f)} ${f.m==="%"?(f.base==="total"?"sobre o total":"sobre os produtos"):""} · ${f.tipo==="transportadora"?"transportadora":"na nota"}</td><td class="r num">${brl(o.k.frete)}</td>
+    <td><input class="f num" id="frr_${o.p.id}" data-frr="${o.p.id}" inputmode="decimal" value="${r?fmtNum(r):""}" placeholder="0,00" style="height:32px"></td>
+    <td class="r num">${r?`<span class="${corVar(r/o.k.frete-1)}">${r-o.k.frete>=0?"+":""}${brl(r-o.k.frete)}</span>`:"—"}</td></tr>`}).join("")}
+  </tbody></table></div>`:`<div class="empty" style="padding:22px">Nenhum pedido com frete em ${ano}.</div>`}</div>`;
+  v.querySelectorAll("[data-frr]").forEach(inp=>inp.onchange=e=>{ const id=inp.dataset.frr; patchPedido(id,{frete_real:parseNum(e.target.value)}).then(ok=>ok&&toast("Frete real salvo")); });
+}
 
 /* PDF -> Claude */
 /* ---------- Leitura de PDF sem IA ---------- */
@@ -1319,6 +1547,7 @@ function lerPedidoTexto(txt, nomeArquivo){
   r.itens.forEach((x,k)=>{ const fim = k+1<r.itens.length ? r.itens[k+1]._li : Math.min(linhas.length, x._li+6);
     if(!RXV.test(x.descricao)){ for(let j=x._li; j<fim && j<=x._li+5; j++){ const m=linhas[j].match(RXV); if(m){ x.voltagem = m[0].toUpperCase().replace(/\s/g,""); break; } } }
     delete x._li; });
+  r.custos = custosDoTexto(linhas);
   const io = linhas.findIndex(l=>/^(informa[cçg][oõ]es\s+adicionais|observa[cçg](?:[oõ]es|[aã]o))\s*:?/i.test(l));
   if (io >= 0){ const ob = [linhas[io].replace(/^[^:]*:\s*/,""), ...linhas.slice(io+1, io+4)].filter(Boolean).join(" ").replace(/\s{2,}/g," ").trim(); r.observacoes = ob.slice(0,300); }
   return r;
@@ -1372,6 +1601,7 @@ async function extrairPedido(file, avisar){
   p.itens.forEach(x=>{ x.unidades = Array.from({length:Math.max(0,Math.round(+x.quantidade||0))},()=>({tipo:p.is_encomenda?"encomenda":"venda", cliente:p.is_encomenda?p.cliente_encomenda:"", receb:""})); vincularItem(x, p.fornecedor); });
   if(p.itens.length) p.is_encomenda = p.itens.some(x=>x.unidades.some(u=>u.tipo==="encomenda"));
   delete p.cliente_encomenda;
+  if(!p.custos) p.custos = custosSugeridos(p.fornecedor) || CUSTOS_PADRAO();
   return p;
 }
 async function extrairPedidoBruto(file, avisar){
@@ -1388,7 +1618,7 @@ async function extrairPedidoBruto(file, avisar){
   }
   return {fornecedor:String(r.fornecedor||"").trim(),numero_pedido:String(r.numero_pedido||"").trim(),valor_total:parseNum(r.valor_total),
     condicao_pagamento:String(r.condicao_pagamento||"").trim(),data_pedido:parseDate(r.data_pedido),prazo_faturamento:parseDate(r.prazo_faturamento),data_faturamento:"",
-    status:"aprovado",is_encomenda:!!r.is_encomenda,cliente_encomenda:r.cliente_encomenda||"",condicao_faturamento:"",observacoes:String(r.observacoes||"").trim(),conferido:false,
+    status:"aprovado",is_encomenda:!!r.is_encomenda,cliente_encomenda:r.cliente_encomenda||"",custos:r.custos||null,condicao_faturamento:"",observacoes:String(r.observacoes||"").trim(),conferido:false,
     itens:Array.isArray(r.itens)? r.itens.map(x=>({codigo:String(x.codigo||""),descricao:String(x.descricao||"").trim(),quantidade:Math.round(parseNum(x.quantidade)),valor_unitario:parseNum(x.valor_unitario),voltagem:x.voltagem||"",
       previsao_chegada: parseDate(x.previsao_chegada) || r.data_entrega || (r.prazo_entrega_dias ? addDays(parseDate(r.data_pedido)||hojeISO(), r.prazo_entrega_dias) : "")})).filter(x=>x.descricao) : []};
 }
@@ -1401,7 +1631,8 @@ async function lerPdf(file,after){
     set("p_forn",r.fornecedor); set("p_num",r.numero_pedido);
     if(r.valor_total) set("p_val",Number(r.valor_total).toFixed(2).replace(".",","));
     set("p_cond",r.condicao_pagamento); set("p_dped",r.data_pedido); set("p_prev",r.prazo_faturamento);
-    if(r.itens.length){ itensTmp = r.itens; renderItens(); }
+    if(r.custos) pedTmp.custos = r.custos;
+    if(r.itens.length){ itensTmp = r.itens; } renderItens();
     note.className="note"; note.style.color="var(--green)"; note.textContent=`Dados preenchidos a partir de ${file.name}${itensTmp.length?` · ${itensTmp.length} itens`:""}. Confira antes de salvar.`;
     after&&after();
   }catch(e){ note.className="note err"; note.textContent = e?.message||"Não foi possível ler o PDF."; }
@@ -1416,6 +1647,7 @@ function modalVer(p){
     <div><span>Data do pedido</span>${fmtD(p.data_pedido)}</div><div><span>Previsão de faturamento</span>${fmtD(p.prazo_faturamento)}</div><div><span>Faturado em</span>${fmtD(p.data_faturamento)}</div>
     <div><span>Pagamento</span>${esc(p.condicao_pagamento||"—")}</div><div><span>Cond. faturamento</span>${esc(p.condicao_faturamento||"—")}</div><div><span>Destino</span>${(()=>{const r=resumoDestino(p);return r.e+r.v?`${r.e} encomenda · ${r.v} venda`:(p.is_encomenda?"Encomenda":"Pedido de compra")})()} · ${p.conferido?"Conferido":"A conferir"}</div>
   </div>
+  ${(()=>{ const k=calcCustos(p); if(!k.temItens) return ""; return `<div class="sec-title" style="margin-bottom:6px">Custos</div>${resumoCustosHtml(p)}<div style="height:14px"></div>`; })()}
   <div class="sec-title" style="margin-bottom:6px">Parcelas</div>
   ${ps.length?`<div class="tbl-wrap"><table><thead><tr><th>Parcela</th><th>Prazo</th><th>Vencimento</th><th>Situação</th><th class="r">Valor</th></tr></thead><tbody>${ps.map(x=>`<tr${pagas(p).includes(x.n)?' class="paid"':""}><td>${x.n}/${x.total}</td><td>${x.dias} dias</td><td class="num">${fmtD(x.venc)}</td><td>${pagas(p).includes(x.n)?"Pago":"Em aberto"}</td><td class="r num">${brl(x.valor)}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">Sem data de faturamento para calcular parcelas.</p>`}
   ${p.itens?.length?`<div class="sec-title" style="margin:18px 0 6px">Itens</div><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Descrição</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th><th>Destino</th><th>Chegada</th><th>Situação</th></tr></thead><tbody>${p.itens.map(x=>{const st=sitItem(x), us=x.unidades||[], ne=us.filter(u=>u.tipo==="encomenda").length, cls=[...new Set(us.map(u=>u.cliente).filter(Boolean))];return `<tr><td class="cod">${esc(x.codigo||"")}</td><td>${esc(x.descricao)}${x.cod_produto?` <span class="cod">#${esc(x.cod_produto)}</span>`:""}${x.desc_fornecedor&&x.desc_fornecedor!==x.descricao?`<div class="vinc-pdf">PDF: ${esc(x.desc_fornecedor)}</div>`:""}</td><td class="r num">${x.quantidade}</td><td class="r num">${brl(x.valor_unitario)}</td><td class="r num">${brl(x.quantidade*x.valor_unitario)}</td><td class="mini">${ne?`${ne} encomenda${cls.length?" ("+esc(cls.join(", "))+")":""}`:""}${ne&&us.length-ne?" · ":""}${us.length-ne?`${us.length-ne} venda`:""}</td><td class="num">${x.nova_previsao?`<s class="mini">${fmtD(x.previsao_chegada)}</s> ${fmtD(x.nova_previsao)}`:fmtD(x.previsao_chegada)}</td><td><span class="sit ${st[0]}">${st[1]}</span></td></tr>`}).join("")}</tbody></table></div>`:""}
@@ -1794,14 +2026,14 @@ function showFila(){
     const p=i.p;
     return `<tr style="${i.incluir?"":"opacity:.5"}">
       <td><button class="check ${i.incluir?"on":""}" data-qinc="${i.k}" aria-pressed="${i.incluir}" title="Importar este pedido">${i.incluir?ic.ok:""}</button></td>
-      <td style="min-width:200px">${inp(i,"fornecedor",p.fornecedor)}<div class="mini" style="margin-top:3px">${esc(i.nome)}${` · <button type="button" class="btn sm" data-qit="${i.k}" style="height:24px;margin-left:2px">${i.aberto?"Fechar itens":`Itens e prazos (${p.itens.length})`}</button>`}${p.itens.length&&p.itens.every(x=>x.previsao_chegada)?' <span class="sit ok">prazos ok</span>':p.itens.length?' <span class="sit sem">sem prazo</span>':""}${(()=>{ if(!p.itens.length||!CAT.carregado) return ""; const ok=p.itens.filter(x=>x.cod_produto).length; return ok===p.itens.length?` <span class="vtag v-ok">${ok}/${ok} no cadastro</span>`:` <span class="vtag ${p.itens.some(x=>x.vinculo==="novo")?"v-nao":"v-sug"}">${p.itens.length-ok} para vincular</span>`; })()}${i.dup?' · <b style="color:var(--amber)">já cadastrado</b>':""}${!p.valor_total||!p.condicao_pagamento?' · <b style="color:var(--red)">confira valor e pagamento</b>':""}${!p.prazo_faturamento?' · boletos contados da data do pedido':""}</div>${chipsParcelas(p)}</td>
+      <td style="min-width:200px">${inp(i,"fornecedor",p.fornecedor)}<div class="mini" style="margin-top:3px">${esc(i.nome)}${` · <button type="button" class="btn sm" data-qit="${i.k}" style="height:24px;margin-left:2px">${i.aberto?"Fechar itens":`Itens, custos e prazos (${p.itens.length})`}</button>`}${p.itens.length&&p.itens.every(x=>x.previsao_chegada)?' <span class="sit ok">prazos ok</span>':p.itens.length?' <span class="sit sem">sem prazo</span>':""}${(()=>{ const k=calcCustos(p), vt=+p.valor_total||0; return k.temItens&&vt&&Math.abs(k.nota-vt)>Math.max(1,vt*0.005)?` <span class="vtag v-sug" title="Produtos + IPI + ST${k.c.frete.tipo==="nota"?" + frete":""} = ${brl(k.nota)}">total não confere (${k.nota-vt>0?"+":""}${brl(k.nota-vt)})</span>`:""; })()}${(()=>{ if(!p.itens.length||!CAT.carregado) return ""; const ok=p.itens.filter(x=>x.cod_produto).length; return ok===p.itens.length?` <span class="vtag v-ok">${ok}/${ok} no cadastro</span>`:` <span class="vtag ${p.itens.some(x=>x.vinculo==="novo")?"v-nao":"v-sug"}">${p.itens.length-ok} para vincular</span>`; })()}${i.dup?' · <b style="color:var(--amber)">já cadastrado</b>':""}${!p.valor_total||!p.condicao_pagamento?' · <b style="color:var(--red)">confira valor e pagamento</b>':""}${!p.prazo_faturamento?' · boletos contados da data do pedido':""}</div>${chipsParcelas(p)}</td>
       <td>${inp(i,"numero_pedido",p.numero_pedido,"num")}</td>
       <td>${inp(i,"condicao_pagamento",p.condicao_pagamento)}</td>
       <td><input class="f" type="date" id="q${i.k}_prev" data-q="${i.k}" data-k="prazo_faturamento" value="${p.prazo_faturamento||""}" style="height:32px;font-size:13px"></td>
       <td><select class="f" id="q${i.k}_st" data-q="${i.k}" data-k="status" style="height:32px;font-size:13px">${STATUS.map(s=>`<option value="${s.v}" ${s.v===p.status?"selected":""}>${s.l}</option>`).join("")}</select></td>
       <td class="mini">${(()=>{const r=resumoDestino(p);return `${r.v} venda<br>${r.e} encomenda`})()}</td>
       <td>${inp(i,"valor_total",p.valor_total?p.valor_total.toFixed(2).replace(".",","):"","num")}</td>
-      <td><button class="icon-btn" data-qrm="${i.k}" aria-label="Remover">${ic.x}</button></td></tr>${i.aberto?`<tr><td></td><td colspan="8" data-itbox="${i.k}">${itemEditor(p.itens, basePrazo(p), "f"+i.k)}</td></tr>`:""}`;}).join("")}
+      <td><button class="icon-btn" data-qrm="${i.k}" aria-label="Remover">${ic.x}</button></td></tr>${i.aberto?`<tr><td></td><td colspan="8" data-itbox="${i.k}">${itemEditor(p.itens, basePrazo(p), "f"+i.k, p)}</td></tr>`:""}`;}).join("")}
   </tbody></table></div>`;
   const find=k=>fila.find(i=>i.k===+k);
   box.querySelectorAll("[data-q]:not([data-i])").forEach(el=>el.addEventListener("change",e=>{
@@ -1813,7 +2045,7 @@ function showFila(){
   }));
   box.querySelectorAll("[data-qinc]").forEach(b=>b.onclick=()=>{ const it=find(b.dataset.qinc); it.incluir=!it.incluir; showFila(); });
   box.querySelectorAll("[data-qit]").forEach(b=>b.onclick=()=>{ const it=find(b.dataset.qit); it.aberto=!it.aberto; showFila(); });
-  box.querySelectorAll("[data-itbox]").forEach(td=>{ const it=find(td.dataset.itbox); bindItemEditor(td, it.p.itens, ()=>basePrazo(it.p), showFila, ()=>it.p.fornecedor); });
+  box.querySelectorAll("[data-itbox]").forEach(td=>{ const it=find(td.dataset.itbox); bindItemEditor(td, it.p.itens, ()=>basePrazo(it.p), showFila, ()=>it.p.fornecedor, it.p); });
   box.querySelectorAll("[data-qrm]").forEach(b=>b.onclick=()=>{ fila=fila.filter(i=>i.k!==+b.dataset.qrm); showFila(); });
   box.querySelectorAll("[data-retry]").forEach(b=>b.onclick=()=>{ const it=find(b.dataset.retry); it.estado="espera"; processarFila(); });
   $("#filaLimpar").onclick=()=>{ if(filaRodando){toast("Aguarde terminar a leitura");return;} fila=[]; showFila(); };
