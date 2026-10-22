@@ -142,6 +142,15 @@ select.pillsel{appearance:none;-webkit-appearance:none;cursor:pointer;height:30p
 .empty b{display:block;color:var(--fg);font-weight:500;margin-bottom:4px}
 /* Contas */
 .form-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1.2fr) minmax(0,1.2fr) auto;gap:10px;align-items:center}
+.it-box{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.it-all{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.it-all input{width:80px}
+.sit{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sit::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.sit.atraso{color:var(--red);background:var(--red-soft)}.sit.semana{color:var(--amber);background:var(--amber-soft)}
+.sit.prev{color:var(--blue);background:var(--blue-soft)}.sit.sem{color:var(--muted);background:var(--surface-2);border:1px solid var(--line)}
+.sit.ok{color:var(--green);background:var(--green-soft)}.sit.parc{color:var(--violet);background:var(--violet-soft)}
+.cod{font-family:var(--font-num);font-size:12px;color:var(--muted)}
 .form-row.lm{grid-template-columns:minmax(0,1.1fr) minmax(0,.7fr) minmax(0,1.4fr) minmax(0,1fr) auto}
 .boxed{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px}
 .lab{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:6px;display:block}
@@ -228,6 +237,7 @@ tr.paid td .desc{text-decoration:line-through}
     <button class="nav" data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Dashboard</button>
     <button class="nav" data-view="pedidos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>Pedidos</button>
     <button class="nav" data-view="contas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7H5a2 2 0 0 1 0-4h13v4"/><path d="M3 5v14a2 2 0 0 0 2 2h15V7"/><path d="M16 14h.01"/></svg>Contas a Pagar</button>
+    <button class="nav" data-view="encomendas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>Encomendas</button>
     <button class="nav" data-view="produtos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>Produtos</button>
     <button class="nav" data-view="importar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></svg>Importar</button>
     <div class="side-foot"><span class="mini" style="display:block;margin-bottom:6px">Versão 21/10 · boletos automáticos</span><span class="sync" id="sync"><i></i><span id="syncTxt">Conectando…</span></span><div style="display:flex;gap:6px;margin-top:10px"><button class="btn sm" id="btnAtualizar">Atualizar</button><button class="btn sm" id="btnSair">Sair</button></div></div>
@@ -266,12 +276,12 @@ const S = {
   view: "dashboard", pedidos: [], contas: [], metas: {}, metaPadrao: 150000,
   ano: today.getFullYear(), mes: today.getMonth(), // dashboard
   f: {q:"",status:"",conf:"",mes:"",ord:"recente",dir:"desc"},
-  cf: {mes:"",tipo:"",q:""}, pq: "", pord: "valor",
+  cf: {mes:"",tipo:"",q:""}, ef: {q:"",sit:"pend",forn:"",enc:false}, pq: "", pord: "valor",
   pin: "", live: false, loaded: {p:false,c:false,m:false}
 };
 let chart = null;
 try{ const v = localStorage.getItem("cp_view"); if(v) S.view = v; S.pin = localStorage.getItem("cp_pin")||""; }catch(e){}
-if (location.hash && /^#(dashboard|pedidos|contas|produtos|importar)$/.test(location.hash)) S.view = location.hash.slice(1);
+if (location.hash && /^#(dashboard|pedidos|contas|encomendas|produtos|importar)$/.test(location.hash)) S.view = location.hash.slice(1);
 
 /* ---------- Util ---------- */
 const $ = (s,r=document)=>r.querySelector(s);
@@ -439,7 +449,7 @@ function render(){
   const focusId = document.activeElement?.id; const selStart = document.activeElement?.selectionStart;
   if (chart){ chart.destroy(); chart=null; }
   const v = $("#view");
-  ({dashboard:vDash, pedidos:vPedidos, contas:vContas, produtos:vProdutos, importar:vImportar})[S.view](v);
+  ({dashboard:vDash, pedidos:vPedidos, contas:vContas, encomendas:vEncomendas, produtos:vProdutos, importar:vImportar})[S.view](v);
   if (focusId){ const el=document.getElementById(focusId); if(el){ el.focus(); try{ if(selStart!=null) el.setSelectionRange(selStart,selStart);}catch(e){} } }
 }
 const loading = () => !S.loaded.p;
@@ -475,6 +485,7 @@ function vDash(v){
     <div class="chart-box"><canvas id="cf" role="img" aria-label="Boletos por mês de ${S.ano}"></canvas></div>
   </div>
   ${quadroBoletos()}
+  ${quadroChegadas()}
   <div class="two">
     ${comp>meta ? `<div class="alert bad">${ic.warn}<div><b>Meta ultrapassada</b><p>O total comprometido em ${MESES[S.mes]} (parcelas + contas a pagar) excede a meta em <span class="num">${brl(comp-meta)}</span>.</p>${proxMeses(fl)}</div></div>`
       : `<div class="alert ok">${ic.check}<div><b>Dentro da meta</b><p>Ainda cabem <span class="num">${brl(saldo)}</span> em compras com vencimento em ${MESES[S.mes]}.</p>${proxMeses(fl)}</div></div>`}
@@ -495,6 +506,7 @@ function vDash(v){
     $("#metaOk").onclick=ok; $("#metaIn").onkeydown=e=>{if(e.key==="Enter")ok(); if(e.key==="Escape")render();};
   };
   v.querySelectorAll("[data-ver]").forEach(tr=>tr.onclick=()=>{ const p=S.pedidos.find(x=>x.id===tr.dataset.ver); if(p) modalVer(p); });
+  $("#irEnc")&&($("#irEnc").onclick=()=>{ S.ef.sit="pend"; go("encomendas"); });
   drawChart(fl);
 }
 function quadroBoletos(){
@@ -621,7 +633,7 @@ function modalPedido(p){
     <label class="field"><span class="lab">Data real do faturamento</span><input class="f" type="date" id="p_dfat" value="${p.data_faturamento||""}"></label>
     <label class="field"><span class="lab">Condição de faturamento</span><input class="f" id="p_cfat" placeholder="Ex: Faturado, A faturar" value="${esc(p.condicao_faturamento||"")}"></label>
     <div class="field" style="justify-content:flex-end;padding-bottom:8px"><label class="switch"><input type="checkbox" id="p_enc" ${p.is_encomenda?"checked":""}><span class="tr"></span>É encomenda</label></div>
-    <div class="field full"><span class="lab">Itens do pedido <span style="text-transform:none;letter-spacing:0;font-weight:400">(alimentam o ranking de produtos)</span></span><div id="itensBox"></div></div>
+    <div class="field full"><span class="lab">Itens e prazo de entrega <span style="text-transform:none;letter-spacing:0;font-weight:400">(alimentam Encomendas e o ranking de produtos)</span></span><div id="itensBox"></div></div>
     <label class="field full"><span class="lab">Observações</span><textarea class="f" id="p_obs" placeholder="Notas adicionais…">${esc(p.observacoes||"")}</textarea></label>
     <div class="full note" id="parcPrev"></div>
     <div class="full note err" id="pErr" hidden></div>
@@ -632,6 +644,7 @@ function modalPedido(p){
   const prev=()=>{ const tmp={valor_total:parseNum($("#p_val").value),condicao_pagamento:$("#p_cond").value,data_faturamento:$("#p_dfat").value,prazo_faturamento:$("#p_prev").value,data_pedido:$("#p_dped").value};
     const ps=parcelas(tmp); $("#parcPrev").innerHTML = ps.length&&tmp.valor_total ? "Parcelas: "+ps.map(x=>`<span class="num">${fmtD(x.venc)} ${brl(x.valor)}</span>`).join(" · ") : ""; };
   ["p_val","p_cond","p_dfat","p_prev","p_dped"].forEach(i=>$("#"+i).addEventListener("input",prev)); prev();
+  $("#p_dped").addEventListener("change",renderItens);
   $("#pdfIn").onchange=e=>{ const f=e.target.files[0]; if(f) lerPdf(f,prev); };
   $("#pSave").onclick=async()=>{
     const d={fornecedor:$("#p_forn").value.trim(),numero_pedido:$("#p_num").value.trim(),valor_total:parseNum($("#p_val").value),condicao_pagamento:$("#p_cond").value.trim(),
@@ -643,14 +656,46 @@ function modalPedido(p){
     if(await savePedido(ed?p.id:null,d)){ closeModal(); toast(ed?"Pedido atualizado":"Pedido criado"); } else $("#pSave").disabled=false;
   };
 }
+/* Itens: código da fábrica, descrição, quantidade, preço e prazo de entrega (dias e data) */
+const diasEntre=(a,b)=>Math.round((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
+function itemEditor(itens, base, pre){
+  return `<div class="it-box">
+    <div class="it-all">Prazo de entrega para todos os itens: <input class="f num" id="${pre}_todos" inputmode="numeric" placeholder="dias" style="height:30px"> dias <button type="button" class="btn sm" data-ie="todos">Aplicar</button> <span>ou informe item a item. Contado a partir de ${fmtD(base)}.</span></div>
+    <div class="tbl-wrap items-tbl"><table><thead><tr><th style="width:110px">Código</th><th>Descrição</th><th class="r" style="width:70px">Qtd</th><th class="r" style="width:110px">Valor unit.</th><th class="r" style="width:80px">Prazo (dias)</th><th style="width:150px">Chegada prevista</th><th style="width:36px"></th></tr></thead><tbody>
+    ${itens.map((x,i)=>`<tr>
+      <td><input class="f num" id="${pre}_c${i}" data-i="${i}" data-k="codigo" value="${esc(x.codigo||"")}" placeholder="Cód."></td>
+      <td><input class="f" id="${pre}_d${i}" data-i="${i}" data-k="descricao" value="${esc(x.descricao)}" placeholder="Produto"></td>
+      <td><input class="f num" id="${pre}_q${i}" data-i="${i}" data-k="quantidade" inputmode="decimal" value="${x.quantidade??""}" style="text-align:right"></td>
+      <td><input class="f num" id="${pre}_u${i}" data-i="${i}" data-k="valor_unitario" inputmode="decimal" value="${x.valor_unitario!=null?String(x.valor_unitario).replace(".",","):""}" style="text-align:right"></td>
+      <td><input class="f num" id="${pre}_p${i}" data-i="${i}" data-k="prazo_dias" inputmode="numeric" value="${x.previsao_chegada&&base?diasEntre(base,x.previsao_chegada):""}" style="text-align:right"></td>
+      <td><input class="f" type="date" id="${pre}_a${i}" data-i="${i}" data-k="previsao_chegada" value="${x.previsao_chegada||""}"></td>
+      <td><button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover item">${ic.x}</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <div><button type="button" class="btn sm" data-ie="add">${ic.plus} Adicionar item</button> <span class="mini">${itens.length?`${itens.length} itens · ${brl(itens.reduce((a,x)=>a+(+x.quantidade||0)*(+x.valor_unitario||0),0))}`:""}</span></div>
+  </div>`;
+}
+function bindItemEditor(box, itens, getBase, redraw){
+  const later=()=>setTimeout(()=>{ const id=document.activeElement?.id; redraw(); if(id) document.getElementById(id)?.focus(); },0);
+  box.querySelectorAll("input[data-k]").forEach(inp=>inp.addEventListener("change",e=>{
+    const i=+e.target.dataset.i,k=e.target.dataset.k,v=e.target.value,it=itens[i], base=getBase();
+    if(k==="descricao"||k==="codigo") it[k]=v.trim();
+    else if(k==="previsao_chegada") it.previsao_chegada=v;
+    else if(k==="prazo_dias"){ const d=parseInt(v,10); it.previsao_chegada = (!isNaN(d)&&base) ? addDays(base,d) : ""; }
+    else it[k]=parseNum(v);
+    later();
+  }));
+  box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ itens.splice(+b.dataset.rm,1); redraw(); });
+  box.querySelector('[data-ie="add"]').onclick=()=>{ itens.push({codigo:"",descricao:"",quantidade:1,valor_unitario:0,previsao_chegada:""}); redraw(); };
+  box.querySelector('[data-ie="todos"]').onclick=()=>{ const inp=box.querySelector('input[id$="_todos"]'); const d=parseInt(inp.value,10), base=getBase();
+    if(isNaN(d)){ toast("Informe o prazo em dias"); return; } if(!base){ toast("Preencha a data do pedido primeiro"); return; }
+    itens.forEach(x=>x.previsao_chegada=addDays(base,d)); redraw(); };
+}
+const basePrazo = p => p.data_pedido || today.toISOString().slice(0,10);
 function renderItens(){
   const box=$("#itensBox"); if(!box) return;
-  box.innerHTML = `<div class="tbl-wrap items-tbl"><table><thead><tr><th>Descrição</th><th class="r" style="width:80px">Qtd</th><th class="r" style="width:120px">Valor unit.</th><th class="r" style="width:110px">Total</th><th style="width:36px"></th></tr></thead><tbody>
-  ${itensTmp.map((x,i)=>`<tr><td><input class="f" data-i="${i}" data-k="descricao" value="${esc(x.descricao)}" placeholder="Produto"></td><td><input class="f num" data-i="${i}" data-k="quantidade" inputmode="decimal" value="${x.quantidade??""}" style="text-align:right"></td><td><input class="f num" data-i="${i}" data-k="valor_unitario" inputmode="decimal" value="${x.valor_unitario!=null?String(x.valor_unitario).replace(".",","):""}" style="text-align:right"></td><td class="r num">${brl((+x.quantidade||0)*(+x.valor_unitario||0))}</td><td><button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover item">${ic.x}</button></td></tr>`).join("")}
-  </tbody></table></div><button type="button" class="btn sm" id="addItem" style="margin-top:8px">${ic.plus} Adicionar item</button>`;
-  box.querySelectorAll("input[data-k]").forEach(inp=>inp.addEventListener("change",e=>{ const i=+e.target.dataset.i,k=e.target.dataset.k; itensTmp[i][k]= k==="descricao"?e.target.value:parseNum(e.target.value); renderItens(); }));
-  box.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ itensTmp.splice(+b.dataset.rm,1); renderItens(); });
-  $("#addItem").onclick=()=>{ itensTmp.push({descricao:"",quantidade:1,valor_unitario:0}); renderItens(); box.querySelector(`input[data-i="${itensTmp.length-1}"]`)?.focus(); };
+  const base=()=> $("#p_dped")?.value || today.toISOString().slice(0,10);
+  box.innerHTML=itemEditor(itensTmp, base(), "m");
+  bindItemEditor(box, itensTmp, base, renderItens);
 }
 
 /* PDF -> Claude */
@@ -729,7 +774,10 @@ function lerPedidoTexto(txt, nomeArquivo){
   /* Datas */
   for (let i=0;i<linhas.length;i++){
     const l = linhas[i];
-    const rp = /(previs[aã]o|prazo\s+de\s+entrega|data\s+de\s+entrega|entrega\s+prevista|faturamento|embarque)/i;
+    const rp = /(previs[aã]o\s+de\s+faturamento|data\s+de\s+faturamento|prev\.?\s*fat\w*|faturamento|embarque)/i;
+    const re = /(prazo\s+de\s+entrega|data\s+(de\s+)?entrega|entrega\s+prevista|previs[aã]o\s+de\s+entrega|previs[aã]o\s+de\s+chegada)/i;
+    if (!r.data_entrega && re.test(l)) r.data_entrega = dataDe(l, re) || "";
+    if (!r.prazo_entrega_dias && re.test(l)){ const m = l.slice(l.search(re)).match(/(\d{1,3})\s*(dias|dd|d\.?\s*[uú]teis)\b/i); if (m) r.prazo_entrega_dias = +m[1]; }
     const rd = /(data\s+(do\s+)?(pedido|emiss[aã]o|or[cç]amento)|emiss[aã]o|emitido\s+em|^data\b)/i;
     if (!r.prazo_faturamento && rp.test(l)) r.prazo_faturamento = dataDe(l, rp) || dataDe(linhas[i+1]||"");
     if (!r.data_pedido && rd.test(l)) r.data_pedido = dataDe(l, rd) || dataDe(linhas[i+1]||"");
@@ -832,7 +880,8 @@ async function extrairPedido(file, avisar){
   return {fornecedor:String(r.fornecedor||"").trim(),numero_pedido:String(r.numero_pedido||"").trim(),valor_total:parseNum(r.valor_total),
     condicao_pagamento:String(r.condicao_pagamento||"").trim(),data_pedido:parseDate(r.data_pedido),prazo_faturamento:parseDate(r.prazo_faturamento),data_faturamento:"",
     status:"aprovado",is_encomenda:!!r.is_encomenda,condicao_faturamento:"",observacoes:String(r.observacoes||"").trim(),conferido:false,
-    itens:Array.isArray(r.itens)? r.itens.map(x=>({codigo:String(x.codigo||""),descricao:String(x.descricao||"").trim(),quantidade:parseNum(x.quantidade),valor_unitario:parseNum(x.valor_unitario)})).filter(x=>x.descricao) : []};
+    itens:Array.isArray(r.itens)? r.itens.map(x=>({codigo:String(x.codigo||""),descricao:String(x.descricao||"").trim(),quantidade:parseNum(x.quantidade),valor_unitario:parseNum(x.valor_unitario),
+      previsao_chegada: parseDate(x.previsao_chegada) || r.data_entrega || (r.prazo_entrega_dias ? addDays(parseDate(r.data_pedido)||today.toISOString().slice(0,10), r.prazo_entrega_dias) : "")})).filter(x=>x.descricao) : []};
 }
 const isDup = p => S.pedidos.some(x=>x.numero_pedido&&x.numero_pedido===p.numero_pedido&&(x.fornecedor||"").toUpperCase()===(p.fornecedor||"").toUpperCase());
 async function lerPdf(file,after){
@@ -860,7 +909,7 @@ function modalVer(p){
   </div>
   <div class="sec-title" style="margin-bottom:6px">Parcelas</div>
   ${ps.length?`<div class="tbl-wrap"><table><thead><tr><th>Parcela</th><th>Prazo</th><th>Vencimento</th><th>Situação</th><th class="r">Valor</th></tr></thead><tbody>${ps.map(x=>`<tr${pagas(p).includes(x.n)?' class="paid"':""}><td>${x.n}/${x.total}</td><td>${x.dias} dias</td><td class="num">${fmtD(x.venc)}</td><td>${pagas(p).includes(x.n)?"Pago":"Em aberto"}</td><td class="r num">${brl(x.valor)}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">Sem data de faturamento para calcular parcelas.</p>`}
-  ${p.itens?.length?`<div class="sec-title" style="margin:18px 0 6px">Itens</div><div class="tbl-wrap"><table><thead><tr><th>Descrição</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th></tr></thead><tbody>${p.itens.map(x=>`<tr><td>${esc(x.descricao)}</td><td class="r num">${x.quantidade}</td><td class="r num">${brl(x.valor_unitario)}</td><td class="r num">${brl(x.quantidade*x.valor_unitario)}</td></tr>`).join("")}</tbody></table></div>`:""}
+  ${p.itens?.length?`<div class="sec-title" style="margin:18px 0 6px">Itens</div><div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Descrição</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th><th>Chegada</th><th>Situação</th></tr></thead><tbody>${p.itens.map(x=>{const st=sitItem(x);return `<tr><td class="cod">${esc(x.codigo||"")}</td><td>${esc(x.descricao)}</td><td class="r num">${x.quantidade}</td><td class="r num">${brl(x.valor_unitario)}</td><td class="r num">${brl(x.quantidade*x.valor_unitario)}</td><td class="num">${fmtD(x.previsao_chegada)}</td><td><span class="sit ${st[0]}">${st[1]}</span></td></tr>`}).join("")}</tbody></table></div>`:""}
   ${p.observacoes?`<div class="sec-title" style="margin:18px 0 6px">Observações</div><p style="margin:0;white-space:pre-wrap">${esc(p.observacoes)}</p>`:""}
   <div class="mfoot"><button class="btn" data-close>Fechar</button><button class="btn primary" id="vEdit">${ic.edit} Editar</button></div>`);
   $("#vEdit").onclick=()=>modalPedido(p);
@@ -959,6 +1008,109 @@ function vContas(v){
   v.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>{ if(b.classList.contains("armed")){ const cid=b.dataset.cdel; S.contas=S.contas.filter(x=>x.id!==cid); render(); guard(()=>api("excluirConta",{id:cid}),"Conta excluída"); return;} b.classList.add("armed"); b.textContent="Excluir?"; setTimeout(()=>{if(b.isConnected){b.classList.remove("armed");b.innerHTML=ic.trash}},3000); });
 }
 
+/* ---------- Encomendas e chegadas ---------- */
+const hojeISO = () => today.toISOString().slice(0,10);
+function sitItem(x){
+  const q=+x.quantidade||0, r=+x.recebido_qtd||0;
+  if(q && r>=q) return ["ok", x.data_recebimento?`Recebido ${fmtD(x.data_recebimento).slice(0,5)}`:"Recebido"];
+  if(!x.previsao_chegada) return [r>0?"parc":"sem", r>0?`Parcial ${r}/${q} · sem previsão`:"Sem previsão"];
+  const d=diasEntre(hojeISO(), x.previsao_chegada);
+  const pre = r>0 ? `Parcial ${r}/${q} · ` : "";
+  if(d<0) return ["atraso", `${pre}Atrasado ${-d} dia${d===-1?"":"s"}`];
+  if(d===0) return ["semana", `${pre}Chega hoje`];
+  if(d<=7) return ["semana", `${pre}Chega em ${d} dia${d===1?"":"s"}`];
+  return [r>0?"parc":"prev", `${pre}Em ${d} dias`];
+}
+function linhasEncomenda(){
+  const out=[];
+  for(const p of S.pedidos){
+    if(p.status==="cancelado"||p.status==="orcamento") continue;
+    const its = Array.isArray(p.itens)?p.itens:[];
+    if(!its.length){ out.push({p,i:-1,x:{codigo:"",descricao:"Itens não cadastrados neste pedido",quantidade:0,previsao_chegada:""},vazio:true}); continue; }
+    its.forEach((x,i)=>out.push({p,i,x}));
+  }
+  return out;
+}
+function quadroChegadas(){
+  const pend=linhasEncomenda().filter(l=>!l.vazio && sitItem(l.x)[0]!=="ok");
+  const atr=pend.filter(l=>sitItem(l.x)[0]==="atraso"), sem=pend.filter(l=>sitItem(l.x)[0]==="semana");
+  const lista=[...atr,...sem].sort((a,b)=>a.x.previsao_chegada.localeCompare(b.x.previsao_chegada)).slice(0,8);
+  return `<div class="card pad"><div class="chart-head"><div><h2>Chegadas</h2><div class="mini">${atr.length} ite${atr.length===1?"m":"ns"} atrasado${atr.length===1?"":"s"} · ${sem.length} chegando nos próximos 7 dias · ${pend.filter(l=>!l.x.previsao_chegada).length} sem previsão</div></div><button class="btn sm" id="irEnc">Ver encomendas</button></div>
+  ${lista.length?`<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Código</th><th>Produto</th><th class="r">Qtd</th><th>Fornecedor</th><th>Chegada</th><th>Situação</th></tr></thead><tbody>
+  ${lista.map(l=>{const st=sitItem(l.x);return `<tr data-ver="${l.p.id}" style="cursor:pointer"><td class="cod">${esc(l.x.codigo||"")}</td><td style="font-weight:600">${esc(l.x.descricao)}${l.p.is_encomenda?' <span class="tag">ENCOMENDA</span>':""}</td><td class="r num">${(+l.x.quantidade||0)-(+l.x.recebido_qtd||0)}</td><td>${esc(l.p.fornecedor)}</td><td class="num">${fmtD(l.x.previsao_chegada)}</td><td><span class="sit ${st[0]}">${st[1]}</span></td></tr>`}).join("")}
+  </tbody></table></div>`:`<div class="empty" style="padding:22px">Nada atrasado nem chegando nos próximos 7 dias.</div>`}</div>`;
+}
+function vEncomendas(v){
+  const f=S.ef, q=f.q.trim().toLowerCase(), todas=linhasEncomenda();
+  const fornecedores=[...new Set(todas.map(l=>l.p.fornecedor))].sort();
+  const l=todas.filter(r=>{
+    const st=sitItem(r.x)[0];
+    if(f.sit==="pend"&&(st==="ok"||r.vazio&&false)) return false;
+    if(f.sit==="atraso"&&st!=="atraso") return false;
+    if(f.sit==="semana"&&st!=="semana") return false;
+    if(f.sit==="sem"&&!(st==="sem"||r.vazio||(st==="parc"&&!r.x.previsao_chegada))) return false;
+    if(f.sit==="ok"&&st!=="ok") return false;
+    if(f.forn&&r.p.fornecedor!==f.forn) return false;
+    if(f.enc&&!r.p.is_encomenda) return false;
+    if(q&&!(`${r.x.codigo} ${r.x.descricao} ${r.p.fornecedor} ${r.p.numero_pedido} ${r.p.observacoes}`.toLowerCase().includes(q))) return false;
+    return true;
+  }).sort((a,b)=>(a.x.previsao_chegada||"9999").localeCompare(b.x.previsao_chegada||"9999")||a.p.fornecedor.localeCompare(b.p.fornecedor));
+  const pend=todas.filter(r=>!r.vazio&&sitItem(r.x)[0]!=="ok");
+  const qtdPend=pend.reduce((a,r)=>a+(+r.x.quantidade||0)-(+r.x.recebido_qtd||0),0);
+  const cnt=k=>pend.filter(r=>sitItem(r.x)[0]===k).length;
+  v.innerHTML=`
+  <div class="head"><div><h1>Encomendas</h1><p class="sub">Cada produto pedido, com o código da fábrica, a chegada prevista e o que já foi recebido</p></div></div>
+  <div class="kpis">
+    <div class="card kpi"><div class="kpi-top">Itens a receber ${ic.box}</div><div class="big">${qtdPend.toLocaleString("pt-BR")}</div><div class="mini">${pend.length} produtos em ${new Set(pend.map(r=>r.p.id)).size} pedidos</div></div>
+    <div class="card kpi"><div class="kpi-top">Atrasados ${ic.warn}</div><div class="big ${cnt("atraso")?"neg":""}">${cnt("atraso")}</div><div class="mini">passaram da previsão</div></div>
+    <div class="card kpi"><div class="kpi-top">Chegam em 7 dias ${ic.trend}</div><div class="big">${cnt("semana")}</div><div class="mini">até ${fmtD(addDays(hojeISO(),7))}</div></div>
+    <div class="card kpi"><div class="kpi-top">Sem previsão ${ic.hash}</div><div class="big">${pend.filter(r=>!r.x.previsao_chegada).length}</div><div class="mini">informe o prazo de entrega</div></div>
+  </div>
+  <div class="toolbar">
+    <div class="search">${ic.search}<input class="f" id="eq" placeholder="Buscar código, produto, fornecedor, pedido ou cliente…" value="${esc(f.q)}"></div>
+    <select class="f" id="esit" aria-label="Situação" style="flex:0 1 190px">${[["pend","A receber"],["atraso","Atrasados"],["semana","Chegam em 7 dias"],["sem","Sem previsão"],["ok","Recebidos"],["todos","Todos"]].map(([k,n])=>`<option value="${k}" ${f.sit===k?"selected":""}>${n}</option>`).join("")}</select>
+    <select class="f" id="eforn" aria-label="Fornecedor" style="flex:0 1 220px"><option value="">Todos os fornecedores</option>${fornecedores.map(x=>`<option ${f.forn===x?"selected":""}>${esc(x)}</option>`).join("")}</select>
+    <label class="switch" style="height:38px"><input type="checkbox" id="eenc" ${f.enc?"checked":""}><span class="tr"></span>Só encomendas</label>
+  </div>
+  <div class="card">${l.length?`<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Produto</th><th class="r">Recebido / Qtd</th><th>Fornecedor · pedido</th><th style="width:160px">Chegada prevista</th><th>Situação</th><th style="width:150px"></th></tr></thead><tbody>
+  ${l.map(r=>{const st=sitItem(r.x), q=+r.x.quantidade||0, rc=+r.x.recebido_qtd||0;
+    return `<tr class="${st[0]==="ok"?"paid":""}">
+    <td class="cod">${esc(r.x.codigo||"—")}</td>
+    <td style="min-width:200px"><span class="desc" style="font-weight:600">${esc(r.x.descricao)}</span>${r.p.is_encomenda?' <span class="tag">ENCOMENDA</span>':""}${r.p.observacoes&&r.p.is_encomenda?`<div class="mini" title="${esc(r.p.observacoes)}">${esc(r.p.observacoes.slice(0,70))}${r.p.observacoes.length>70?"…":""}</div>`:""}</td>
+    <td class="r num">${r.vazio?"—":`${rc} / ${q}`}</td>
+    <td>${esc(r.p.fornecedor)}<div class="mini">${r.p.numero_pedido?"#"+esc(r.p.numero_pedido)+" · ":""}${ST[r.p.status]?.l||""}</div></td>
+    <td>${r.vazio?"":`<input class="f" type="date" id="ech_${r.p.id}_${r.i}" data-ech="${r.p.id}|${r.i}" value="${r.x.previsao_chegada||""}" style="height:32px;font-size:13px">`}</td>
+    <td><span class="sit ${r.vazio?"sem":st[0]}">${r.vazio?"Cadastrar itens":st[1]}</span></td>
+    <td style="text-align:right;white-space:nowrap">${r.vazio?`<button class="btn sm" data-eedit="${r.p.id}">Editar pedido</button>`:st[0]==="ok"?`<button class="btn sm" data-edesf="${r.p.id}|${r.i}">Desfazer</button>`:`<button class="btn sm primary" data-erec="${r.p.id}|${r.i}">Receber</button>`} <button class="icon-btn" data-ever="${r.p.id}" title="Ver pedido">${ic.eye}</button></td></tr>`}).join("")}
+  </tbody></table></div>`:`<div class="empty">${ic.box}<b>${!S.loaded.p?"Carregando…":"Nenhum item neste filtro"}</b>Os itens entram aqui pelos PDFs importados ou pelo cadastro do pedido.</div>`}</div>`;
+  let tq; $("#eq").oninput=e=>{clearTimeout(tq);tq=setTimeout(()=>{f.q=e.target.value;render()},200)};
+  $("#esit").onchange=e=>{f.sit=e.target.value;render()};
+  $("#eforn").onchange=e=>{f.forn=e.target.value;render()};
+  $("#eenc").onchange=e=>{f.enc=e.target.checked;render()};
+  const alvo=k=>{ const [id,i]=k.split("|"); const p=S.pedidos.find(x=>x.id===id); return {p, i:+i}; };
+  const salvarItens=(p,itens,msg)=>{ const campos={itens}; const todos=itens.length&&itens.every(x=>(+x.recebido_qtd||0)>=(+x.quantidade||0));
+    if(todos&&p.status!=="entregue") campos.status="entregue";
+    if(!todos&&p.status==="entregue") campos.status=p.data_faturamento?"faturado":"aprovado";
+    return patchPedido(p.id,campos).then(ok=>{ if(ok&&msg) toast(msg+(campos.status==="entregue"?" · pedido entregue":"")); }); };
+  v.querySelectorAll("[data-ech]").forEach(inp=>inp.onchange=e=>{ const {p,i}=alvo(inp.dataset.ech); const its=p.itens.map(x=>({...x})); its[i].previsao_chegada=e.target.value; salvarItens(p,its,"Previsão atualizada"); });
+  v.querySelectorAll("[data-edesf]").forEach(b=>b.onclick=()=>{ const {p,i}=alvo(b.dataset.edesf); const its=p.itens.map(x=>({...x})); its[i].recebido_qtd=0; its[i].data_recebimento=""; salvarItens(p,its,"Recebimento desfeito"); });
+  v.querySelectorAll("[data-ever]").forEach(b=>b.onclick=()=>{ const p=S.pedidos.find(x=>x.id===b.dataset.ever); if(p) modalVer(p); });
+  v.querySelectorAll("[data-eedit]").forEach(b=>b.onclick=()=>{ const p=S.pedidos.find(x=>x.id===b.dataset.eedit); if(p) modalPedido(p); });
+  v.querySelectorAll("[data-erec]").forEach(b=>b.onclick=()=>{ const {p,i}=alvo(b.dataset.erec); const x=p.itens[i]; const falta=(+x.quantidade||0)-(+x.recebido_qtd||0);
+    openModal(`<div class="mhead"><h3>Receber item</h3><button class="icon-btn" data-close aria-label="Fechar">${ic.x}</button></div>
+    <p style="margin:0 0 14px"><span class="cod">${esc(x.codigo||"")}</span> <b>${esc(x.descricao)}</b><br><span class="mini">${esc(p.fornecedor)}${p.numero_pedido?" · #"+esc(p.numero_pedido):""} · pedido ${x.quantidade}, já recebido ${+x.recebido_qtd||0}</span></p>
+    <div class="grid2"><label class="field"><span class="lab">Quantidade que chegou</span><input class="f num" id="rq" inputmode="decimal" value="${falta}"></label>
+    <label class="field"><span class="lab">Data do recebimento</span><input class="f" type="date" id="rd" value="${hojeISO()}"></label></div>
+    <div class="mfoot"><button class="btn" data-close>Cancelar</button>${p.itens.length>1?`<button class="btn" id="rTodos">Receber pedido inteiro</button>`:""}<button class="btn primary" id="rOk">Confirmar recebimento</button></div>`);
+    $("#rq").select();
+    $("#rOk").onclick=async()=>{ const n=parseNum($("#rq").value); if(!(n>0)){ toast("Informe a quantidade recebida"); return; }
+      $("#rOk").disabled=true; const its=p.itens.map(y=>({...y})); its[i].recebido_qtd=Math.min(+its[i].quantidade||0,(+its[i].recebido_qtd||0)+n); its[i].data_recebimento=$("#rd").value||hojeISO();
+      closeModal(); await salvarItens(p,its,"Recebimento registrado"); };
+    $("#rTodos")&&($("#rTodos").onclick=async()=>{ const d=$("#rd").value||hojeISO(); const its=p.itens.map(y=>({...y, recebido_qtd:+y.quantidade||0, data_recebimento:(+y.recebido_qtd||0)>=(+y.quantidade||0)&&y.data_recebimento?y.data_recebimento:d}));
+      closeModal(); await salvarItens(p,its,"Pedido recebido"); });
+  });
+}
+
 /* Produtos */
 function vProdutos(v){
   const map=new Map();
@@ -1039,23 +1191,25 @@ function showFila(){
     const p=i.p;
     return `<tr style="${i.incluir?"":"opacity:.5"}">
       <td><button class="check ${i.incluir?"on":""}" data-qinc="${i.k}" aria-pressed="${i.incluir}" title="Importar este pedido">${i.incluir?ic.ok:""}</button></td>
-      <td style="min-width:200px">${inp(i,"fornecedor",p.fornecedor)}<div class="mini" style="margin-top:3px">${esc(i.nome)}${p.itens.length?` · ${p.itens.length} itens`:""}${i.dup?' · <b style="color:var(--amber)">já cadastrado</b>':""}${!p.valor_total||!p.condicao_pagamento?' · <b style="color:var(--red)">confira valor e pagamento</b>':""}${!p.prazo_faturamento?' · boletos contados da data do pedido':""}</div>${chipsParcelas(p)}</td>
+      <td style="min-width:200px">${inp(i,"fornecedor",p.fornecedor)}<div class="mini" style="margin-top:3px">${esc(i.nome)}${` · <button type="button" class="btn sm" data-qit="${i.k}" style="height:24px;margin-left:2px">${i.aberto?"Fechar itens":`Itens e prazos (${p.itens.length})`}</button>`}${p.itens.length&&p.itens.every(x=>x.previsao_chegada)?' <span class="sit ok">prazos ok</span>':p.itens.length?' <span class="sit sem">sem prazo</span>':""}${i.dup?' · <b style="color:var(--amber)">já cadastrado</b>':""}${!p.valor_total||!p.condicao_pagamento?' · <b style="color:var(--red)">confira valor e pagamento</b>':""}${!p.prazo_faturamento?' · boletos contados da data do pedido':""}</div>${chipsParcelas(p)}</td>
       <td>${inp(i,"numero_pedido",p.numero_pedido,"num")}</td>
       <td>${inp(i,"condicao_pagamento",p.condicao_pagamento)}</td>
       <td><input class="f" type="date" id="q${i.k}_prev" data-q="${i.k}" data-k="prazo_faturamento" value="${p.prazo_faturamento||""}" style="height:32px;font-size:13px"></td>
       <td><select class="f" id="q${i.k}_st" data-q="${i.k}" data-k="status" style="height:32px;font-size:13px">${STATUS.map(s=>`<option value="${s.v}" ${s.v===p.status?"selected":""}>${s.l}</option>`).join("")}</select></td>
       <td><label class="switch"><input type="checkbox" data-q="${i.k}" data-k="is_encomenda" ${p.is_encomenda?"checked":""}><span class="tr"></span></label></td>
       <td>${inp(i,"valor_total",p.valor_total?p.valor_total.toFixed(2).replace(".",","):"","num")}</td>
-      <td><button class="icon-btn" data-qrm="${i.k}" aria-label="Remover">${ic.x}</button></td></tr>`;}).join("")}
+      <td><button class="icon-btn" data-qrm="${i.k}" aria-label="Remover">${ic.x}</button></td></tr>${i.aberto?`<tr><td></td><td colspan="8" data-itbox="${i.k}">${itemEditor(p.itens, basePrazo(p), "f"+i.k)}</td></tr>`:""}`;}).join("")}
   </tbody></table></div>`;
   const find=k=>fila.find(i=>i.k===+k);
-  box.querySelectorAll("[data-q]").forEach(el=>el.addEventListener("change",e=>{
+  box.querySelectorAll("[data-q]:not([data-i])").forEach(el=>el.addEventListener("change",e=>{
     const it=find(e.target.dataset.q), k=e.target.dataset.k; if(!it?.p) return;
     it.p[k]= k==="is_encomenda"? e.target.checked : k==="valor_total"? parseNum(e.target.value) : e.target.value.trim();
     if(k==="fornecedor"||k==="numero_pedido") it.dup=isDup(it.p);
     setTimeout(()=>{ const id=document.activeElement?.id; showFila(); if(id) document.getElementById(id)?.focus(); },0);
   }));
   box.querySelectorAll("[data-qinc]").forEach(b=>b.onclick=()=>{ const it=find(b.dataset.qinc); it.incluir=!it.incluir; showFila(); });
+  box.querySelectorAll("[data-qit]").forEach(b=>b.onclick=()=>{ const it=find(b.dataset.qit); it.aberto=!it.aberto; showFila(); });
+  box.querySelectorAll("[data-itbox]").forEach(td=>{ const it=find(td.dataset.itbox); bindItemEditor(td, it.p.itens, ()=>basePrazo(it.p), showFila); });
   box.querySelectorAll("[data-qrm]").forEach(b=>b.onclick=()=>{ fila=fila.filter(i=>i.k!==+b.dataset.qrm); showFila(); });
   box.querySelectorAll("[data-retry]").forEach(b=>b.onclick=()=>{ const it=find(b.dataset.retry); it.estado="espera"; processarFila(); });
   $("#filaLimpar").onclick=()=>{ if(filaRodando){toast("Aguarde terminar a leitura");return;} fila=[]; showFila(); };
